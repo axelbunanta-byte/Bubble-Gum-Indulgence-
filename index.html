@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Bubble Gum Indulgence</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="play-area" aria-labelledby="game-title">
+        <header class="top-bar">
+          <div>
+            <p class="eyebrow">Bubble Gum Indulgence</p>
+            <h1 id="game-title">Keep the bubble alive.</h1>
+          </div>
+          <div class="wallet" aria-label="Player wallet">
+            <span class="wallet-label">Money</span>
+            <strong id="moneyAmount">$0</strong>
+          </div>
+        </header>
+
+        <div class="game-grid">
+          <section class="bubble-panel" aria-label="Bubble status">
+            <div class="gum-wrapper">
+              <div class="gum-pack" aria-hidden="true">
+                <span id="packInitials">SP</span>
+              </div>
+              <div class="bubble" id="bubble">
+                <span id="bubbleSizeLabel">0</span>
+              </div>
+            </div>
+            <div class="stats-strip">
+              <div>
+                <span>Selected gum</span>
+                <strong id="selectedGumName">Starter Packet</strong>
+              </div>
+              <div>
+                <span>Rounds</span>
+                <strong id="roundCount">0</strong>
+              </div>
+              <div>
+                <span>Best bubble</span>
+                <strong id="bestBubble">0</strong>
+              </div>
+            </div>
+          </section>
+
+          <section class="control-panel" aria-label="Bubble challenge">
+            <div class="challenge-header">
+              <div>
+                <h2>Blow the Bubble</h2>
+                <p>Move the slider from wall to wall before the safe zone closes in.</p>
+              </div>
+              <button class="primary-button" id="startButton" type="button">Start</button>
+            </div>
+
+            <div class="meter" id="meter" aria-label="Shrinking bubble control bar">
+              <div class="danger left" id="leftDanger"></div>
+              <div class="safe-zone" id="safeZone"></div>
+              <div class="danger right" id="rightDanger"></div>
+              <div class="slider" id="slider" aria-hidden="true"></div>
+              <div class="edge-marker left-marker" aria-hidden="true"></div>
+              <div class="edge-marker right-marker" aria-hidden="true"></div>
+            </div>
+
+            <div class="move-controls" aria-label="Slider controls">
+              <button class="move-button" id="moveLeft" type="button">Left</button>
+              <button class="move-button" id="moveRight" type="button">Right</button>
+            </div>
+
+            <p class="status-text" id="gameStatus">Pick a gum, then start a round.</p>
+          </section>
+        </div>
+      </section>
+
+      <aside class="side-panel">
+        <section class="panel-section">
+          <div class="section-title">
+            <h2>Inventory</h2>
+            <span id="inventoryCount">0 pieces</span>
+          </div>
+          <div class="inventory-list" id="inventoryList"></div>
+        </section>
+
+        <section class="panel-section">
+          <div class="section-title">
+            <h2>Gum Shop</h2>
+            <span>Buy with game money</span>
+          </div>
+          <div class="shop-list" id="shopList"></div>
+        </section>
+      </aside>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
