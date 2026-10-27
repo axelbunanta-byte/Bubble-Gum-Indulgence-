@@ -7,91 +7,169 @@
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
-    <main class="app-shell">
-      <section class="play-area" aria-labelledby="game-title">
-        <header class="top-bar">
+    <main class="arcade" id="arcade">
+      <section class="stage" aria-labelledby="gameTitle">
+        <header class="hud">
           <div>
             <p class="eyebrow">Bubble Gum Indulgence</p>
-            <h1 id="game-title">Keep the bubble alive.</h1>
+            <h1 id="gameTitle">Bubble Gum Dopamine Arcade</h1>
           </div>
-          <div class="wallet" aria-label="Player wallet">
-            <span class="wallet-label">Money</span>
-            <strong id="moneyAmount">$0</strong>
+          <div class="hud-actions">
+            <div class="stat-pill">
+              <span>Cash</span>
+              <strong id="cash">$0</strong>
+            </div>
+            <div class="stat-pill">
+              <span>Best</span>
+              <strong id="bestTime">0.0s</strong>
+            </div>
+            <button class="icon-button" id="shopButton" type="button" aria-label="Open gum shop" title="Gum shop">
+              Shop
+            </button>
           </div>
         </header>
 
-        <div class="game-grid">
-          <section class="bubble-panel" aria-label="Bubble status">
-            <div class="gum-wrapper">
-              <div class="gum-pack" aria-hidden="true">
-                <span id="packInitials">SP</span>
-              </div>
-              <div class="bubble" id="bubble">
-                <span id="bubbleSizeLabel">0</span>
-              </div>
+        <section class="game-card" aria-label="Bubble game">
+          <div class="bubble-zone" id="bubbleZone">
+            <div class="record-burst" id="recordBurst">New record</div>
+            <div class="bubble" id="bubble">
+              <span id="bubbleText">Ready</span>
             </div>
-            <div class="stats-strip">
+            <div class="gum-label" id="gumLabel">Starter Slab</div>
+          </div>
+
+          <div class="track-wrap">
+            <div class="track-meta">
               <div>
-                <span>Selected gum</span>
-                <strong id="selectedGumName">Starter Packet</strong>
-              </div>
-              <div>
-                <span>Rounds</span>
-                <strong id="roundCount">0</strong>
+                <span>Survival</span>
+                <strong id="timer">0.0s</strong>
               </div>
               <div>
-                <span>Best bubble</span>
-                <strong id="bestBubble">0</strong>
+                <span>Round cash</span>
+                <strong id="roundCash">$0</strong>
               </div>
-            </div>
-          </section>
-
-          <section class="control-panel" aria-label="Bubble challenge">
-            <div class="challenge-header">
               <div>
-                <h2>Blow the Bubble</h2>
-                <p>Move the slider from wall to wall before the safe zone closes in.</p>
+                <span>Equipped</span>
+                <strong id="equippedName">Starter Slab</strong>
               </div>
-              <button class="primary-button" id="startButton" type="button">Start</button>
+              <div>
+                <span>Multiplier</span>
+                <strong id="multiplier">1x</strong>
+              </div>
             </div>
 
-            <div class="meter" id="meter" aria-label="Shrinking bubble control bar">
-              <div class="danger left" id="leftDanger"></div>
-              <div class="safe-zone" id="safeZone"></div>
-              <div class="danger right" id="rightDanger"></div>
-              <div class="slider" id="slider" aria-hidden="true"></div>
-              <div class="edge-marker left-marker" aria-hidden="true"></div>
-              <div class="edge-marker right-marker" aria-hidden="true"></div>
+            <div class="track" id="track" aria-label="Control track">
+              <div class="wall left" id="leftWall"></div>
+              <div class="safe-lane" id="safeLane"></div>
+              <div class="wall right" id="rightWall"></div>
+              <div class="control-chip" id="controlChip"></div>
             </div>
+          </div>
 
-            <div class="move-controls" aria-label="Slider controls">
-              <button class="move-button" id="moveLeft" type="button">Left</button>
-              <button class="move-button" id="moveRight" type="button">Right</button>
+          <div class="controls">
+            <button class="primary" id="playButton" type="button">Start attempt</button>
+            <div class="nudge-controls" aria-label="Touch controls">
+              <button id="leftButton" type="button">Left</button>
+              <button id="rightButton" type="button">Right</button>
             </div>
+          </div>
 
-            <p class="status-text" id="gameStatus">Pick a gum, then start a round.</p>
-          </section>
-        </div>
+          <div class="streak-status">
+            <div>
+              <span>Long runs build streaks. Better streaks earn bigger cash boosts.</span>
+              <strong id="streakText">0 / 3</strong>
+            </div>
+            <div class="streak-pips" aria-hidden="true">
+              <span class="streak-pip"></span>
+              <span class="streak-pip"></span>
+              <span class="streak-pip"></span>
+            </div>
+          </div>
+        </section>
       </section>
 
-      <aside class="side-panel">
-        <section class="panel-section">
-          <div class="section-title">
-            <h2>Inventory</h2>
-            <span id="inventoryCount">0 pieces</span>
+      <aside class="side">
+        <section class="panel">
+          <div class="panel-title">
+            <h2>Current Gum</h2>
+            <span id="gumTier">Tier 1</span>
           </div>
-          <div class="inventory-list" id="inventoryList"></div>
+          <div class="equipped-card">
+            <div class="pack-art" id="packArt">SS</div>
+            <div>
+              <h3 id="currentGumName">Starter Slab</h3>
+              <p id="currentGumFlavor">Thin, stiff, and barely bubble-ready.</p>
+            </div>
+          </div>
+          <dl class="stat-list">
+            <div>
+              <dt>Wall speed</dt>
+              <dd id="wallSpeedStat">1.00x</dd>
+            </div>
+            <div>
+              <dt>Yield</dt>
+              <dd id="yieldStat">1.00x</dd>
+            </div>
+            <div>
+              <dt>Bubble cap</dt>
+              <dd id="capStat">Small</dd>
+            </div>
+            <div class="perk-row">
+              <dt>Perk</dt>
+              <dd id="perkStat">Classic Chew: balanced starter stats.</dd>
+            </div>
+          </dl>
         </section>
 
-        <section class="panel-section">
-          <div class="section-title">
-            <h2>Gum Shop</h2>
-            <span>Buy with game money</span>
+        <section class="panel">
+          <div class="panel-title">
+            <h2>Inventory</h2>
+            <span id="inventoryCount">1 owned</span>
           </div>
-          <div class="shop-list" id="shopList"></div>
+          <div class="inventory" id="inventory"></div>
         </section>
       </aside>
     </main>
+
+    <div class="modal hidden" id="summaryModal" role="dialog" aria-modal="true" aria-labelledby="summaryTitle">
+      <div class="modal-card summary-card">
+        <p class="eyebrow">Pop</p>
+        <h2 id="summaryTitle">Bubble burst</h2>
+        <div class="summary-grid">
+          <div>
+            <span>Time</span>
+            <strong id="summaryTime">0.0s</strong>
+          </div>
+          <div>
+            <span id="summaryCashLabel">Earned</span>
+            <strong id="summaryCash">$0</strong>
+          </div>
+          <div>
+            <span>Total</span>
+            <strong id="summaryTotal">$0</strong>
+          </div>
+        </div>
+        <button class="primary" id="playAgainButton" type="button">Play again</button>
+      </div>
+    </div>
+
+    <div class="modal hidden" id="shopModal" role="dialog" aria-modal="true" aria-labelledby="shopTitle">
+      <div class="modal-card shop-card">
+        <div class="shop-head">
+          <div>
+            <p class="eyebrow">Gum shop</p>
+            <h2 id="shopTitle">Upgrade the chew</h2>
+          </div>
+          <button class="icon-button" id="closeShopButton" type="button" aria-label="Close gum shop" title="Close">
+            Close
+          </button>
+        </div>
+        <input class="shop-search" id="shopSearch" type="search" placeholder="Search 55 flavors" aria-label="Search gum flavors">
+        <div class="shop-list" id="shopList"></div>
+      </div>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <script src="app.js"></script>
   </body>
