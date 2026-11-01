@@ -1,4 +1,5 @@
 const STORAGE_KEY = "bubble-gum-indulgence-v2";
+const AUDIO_STORAGE_KEY = "bubble-gum-indulgence-audio-v1";
 const STREAK_RUNS_REQUIRED = 3;
 const MULTIPLIER_TIERS = [
   { seconds: 22, multiplier: 10, name: "Ultra" },
@@ -248,9 +249,23 @@ const defaultState = {
   nextRoundMultiplier: 1,
 };
 
+const defaultAudioSettings = {
+  musicVolume: 0.35,
+  gameVolume: 0.7,
+};
+
+const MUSIC_NOTES = [659.25, 783.99, 880, 783.99, 698.46, 880, 987.77, 880, 587.33, 698.46, 783.99, 698.46, 523.25, 659.25, 783.99, 987.77];
+const MUSIC_BASS = [164.81, 174.61, 146.83, 130.81];
+
 let state = loadState();
+let audioSettings = loadAudioSettings();
 let inputDirection = 1;
 let audioContext = null;
+let musicGain = null;
+let gameGain = null;
+let musicTimer = null;
+let musicStep = 0;
+let selectedDetailGumId = null;
 let game = createIdleGame();
 
 const els = {
@@ -258,6 +273,7 @@ const els = {
   cash: document.querySelector("#cash"),
   bestTime: document.querySelector("#bestTime"),
   shopButton: document.querySelector("#shopButton"),
+  settingsButton: document.querySelector("#settingsButton"),
   bubbleZone: document.querySelector("#bubbleZone"),
   bubble: document.querySelector("#bubble"),
   bubbleText: document.querySelector("#bubbleText"),
@@ -294,6 +310,27 @@ const els = {
   closeShopButton: document.querySelector("#closeShopButton"),
   shopList: document.querySelector("#shopList"),
   shopSearch: document.querySelector("#shopSearch"),
+  gumDetailModal: document.querySelector("#gumDetailModal"),
+  closeGumDetailButton: document.querySelector("#closeGumDetailButton"),
+  detailPackArt: document.querySelector("#detailPackArt"),
+  detailTier: document.querySelector("#detailTier"),
+  detailName: document.querySelector("#detailName"),
+  detailFlavor: document.querySelector("#detailFlavor"),
+  detailProof: document.querySelector("#detailProof"),
+  detailPitch: document.querySelector("#detailPitch"),
+  detailStats: document.querySelector("#detailStats"),
+  detailComparisons: document.querySelector("#detailComparisons"),
+  detailAction: document.querySelector("#detailAction"),
+  settingsModal: document.querySelector("#settingsModal"),
+  closeSettingsButton: document.querySelector("#closeSettingsButton"),
+  musicVolume: document.querySelector("#musicVolume"),
+  musicVolumeValue: document.querySelector("#musicVolumeValue"),
+  gameVolume: document.querySelector("#gameVolume"),
+  gameVolumeValue: document.querySelector("#gameVolumeValue"),
+  restartButton: document.querySelector("#restartButton"),
+  resetConfirmModal: document.querySelector("#resetConfirmModal"),
+  cancelResetButton: document.querySelector("#cancelResetButton"),
+  confirmResetButton: document.querySelector("#confirmResetButton"),
   recordBurst: document.querySelector("#recordBurst"),
   toast: document.querySelector("#toast"),
 };
@@ -320,7 +357,7 @@ function createIdleGame() {
 function loadState() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    if (!saved || !Array.isArray(saved.unlocked)) return { ...defaultState };
+    if (!saved || !Array.isArray(saved.unlocked)) return createDefaultState();
 
     const unlocked = [...new Set(["starter", ...saved.unlocked])].filter((id) =>
       gums.some((gum) => gum.id === id)
@@ -342,12 +379,40 @@ function loadState() {
         : 1,
     };
   } catch {
-    return { ...defaultState };
+    return createDefaultState();
+  }
+}
+
+function createDefaultState() {
+  return {
+    ...defaultState,
+    unlocked: [...defaultState.unlocked],
+    streakTimes: [],
+  };
+}
+
+function loadAudioSettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(AUDIO_STORAGE_KEY));
+    return {
+      musicVolume: Number.isFinite(saved?.musicVolume)
+        ? Math.max(0, Math.min(1, saved.musicVolume))
+        : defaultAudioSettings.musicVolume,
+      gameVolume: Number.isFinite(saved?.gameVolume)
+        ? Math.max(0, Math.min(1, saved.gameVolume))
+        : defaultAudioSettings.gameVolume,
+    };
+  } catch {
+    return { ...defaultAudioSettings };
   }
 }
 
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function saveAudioSettings() {
+  localStorage.setItem(AUDIO_STORAGE_KEY, JSON.stringify(audioSettings));
 }
 
 function activeGum() {
@@ -431,6 +496,7 @@ function render() {
   els.rightButton.classList.toggle("active", inputDirection > 0);
   els.playButton.textContent = game.active ? "Inflating..." : "Start attempt";
   els.playButton.disabled = game.active;
+  els.settingsButton.disabled = game.active;
 
   renderEquipped(gum);
 }
@@ -493,13 +559,17 @@ function renderShop() {
           <span>${gum.yieldMultiplier.toFixed(2)}x yield</span>
           <span>${gum.maxBubble}px cap</span>
         </div>
-        <button class="gum-action${owned ? " secondary" : ""}" type="button" ${!owned && !canBuy ? "disabled" : ""}>
-          ${owned ? (gum.id === state.activeGumId ? "Equipped" : "Equip") : "Buy"}
-        </button>
+        <div class="shop-actions">
+          <button class="detail-action" type="button">Details</button>
+          <button class="gum-action${owned ? " secondary" : ""}" type="button" ${!owned && !canBuy ? "disabled" : ""}>
+            ${owned ? (gum.id === state.activeGumId ? "Equipped" : "Equip") : "Buy"}
+          </button>
+        </div>
       </div>
     `;
 
-    card.querySelector("button").addEventListener("click", () => {
+    card.querySelector(".detail-action").addEventListener("click", () => openGumDetail(gum.id));
+    card.querySelector(".gum-action").addEventListener("click", () => {
       if (owned) {
         equipGum(gum.id);
       } else {
@@ -509,6 +579,161 @@ function renderShop() {
 
     els.shopList.append(card);
   });
+}
+
+function rankPercent(gum, score, higherIsBetter = true, pool = gums) {
+  const ranked = [...pool].sort((first, second) => {
+    const difference = score(first) - score(second);
+    return higherIsBetter ? -difference : difference;
+  });
+  const rank = ranked.findIndex((item) => item.id === gum.id) + 1;
+  return Math.max(1, Math.ceil((rank / ranked.length) * 100));
+}
+
+function performanceScore(gum) {
+  return (
+    1.4 / gum.wallSpeed +
+    gum.yieldMultiplier * 0.72 +
+    gum.maxBubble / 310 +
+    gum.steerSpeed / 72 +
+    0.85 / gum.collisionPadding +
+    gum.bubbleGrowth
+  );
+}
+
+function valueScore(gum) {
+  return performanceScore(gum) / Math.sqrt(Math.max(gum.price, 35));
+}
+
+function percentDifference(value, baseline) {
+  return Math.round(Math.abs(value / baseline - 1) * 100);
+}
+
+function gumComparisons(gum) {
+  const starter = gums[0];
+  const wallDifference = percentDifference(gum.wallSpeed, starter.wallSpeed);
+  const yieldDifference = percentDifference(gum.yieldMultiplier, starter.yieldMultiplier);
+  const capDifference = percentDifference(gum.maxBubble, starter.maxBubble);
+  const steeringDifference = percentDifference(gum.steerSpeed, starter.steerSpeed);
+  const edgeDifference = percentDifference(gum.collisionPadding, starter.collisionPadding);
+  const growthDifference = percentDifference(gum.bubbleGrowth, starter.bubbleGrowth);
+
+  return [
+    gum.wallSpeed < starter.wallSpeed
+      ? `Walls close ${wallDifference}% slower than Starter Slab.`
+      : gum.wallSpeed > starter.wallSpeed
+        ? `Walls close ${wallDifference}% faster than Starter Slab, raising the risk.`
+        : "Wall pressure matches Starter Slab.",
+    gum.yieldMultiplier > starter.yieldMultiplier
+      ? `Earns ${yieldDifference}% more cash per second than Starter Slab.`
+      : "Cash earnings match Starter Slab.",
+    gum.maxBubble > starter.maxBubble
+      ? `Bubble capacity is ${capDifference}% larger than Starter Slab.`
+      : "Bubble capacity matches Starter Slab.",
+    gum.steerSpeed > starter.steerSpeed
+      ? `Steering is ${steeringDifference}% faster than Starter Slab.`
+      : gum.steerSpeed < starter.steerSpeed
+        ? `Steering is ${steeringDifference}% slower for more deliberate control.`
+        : "Steering speed matches Starter Slab.",
+    gum.collisionPadding < starter.collisionPadding
+      ? `Edge forgiveness improves by ${edgeDifference}% over Starter Slab.`
+      : gum.collisionPadding > starter.collisionPadding
+        ? `The collision margin is ${edgeDifference}% stricter than Starter Slab.`
+        : "Edge forgiveness matches Starter Slab.",
+    gum.bubbleGrowth > starter.bubbleGrowth
+      ? `Bubble growth is ${growthDifference}% faster than Starter Slab.`
+      : gum.bubbleGrowth < starter.bubbleGrowth
+        ? `Bubble growth is ${growthDifference}% slower, favoring longer runs.`
+        : "Bubble growth matches Starter Slab.",
+  ];
+}
+
+function gumPositioning(gum) {
+  const statRanks = [
+    { label: "wall control", percent: rankPercent(gum, (item) => 1 / item.wallSpeed), benefit: "long survival runs" },
+    { label: "cash yield", percent: rankPercent(gum, (item) => item.yieldMultiplier), benefit: "earning cash quickly" },
+    { label: "bubble capacity", percent: rankPercent(gum, (item) => item.maxBubble), benefit: "building enormous bubbles" },
+    { label: "steering speed", percent: rankPercent(gum, (item) => item.steerSpeed), benefit: "fast reaction saves" },
+    { label: "edge forgiveness", percent: rankPercent(gum, (item) => 1 / item.collisionPadding), benefit: "surviving close calls" },
+    { label: "growth speed", percent: rankPercent(gum, (item) => item.bubbleGrowth), benefit: "growing bubbles quickly" },
+  ].sort((first, second) => first.percent - second.percent);
+
+  const strongest = statRanks[0];
+  const pricePercent = rankPercent(gum, (item) => item.price);
+  const purchasableGums = gums.filter((item) => item.price > 0);
+  const valuePercent = gum.price > 0
+    ? rankPercent(gum, valueScore, true, purchasableGums)
+    : 1;
+
+  let proof;
+  if (gum.price === 0) {
+    proof = "The free benchmark every other gum is measured against.";
+  } else if (pricePercent <= 10) {
+    proof = `Collector rarity: only ${pricePercent}% of gums are priced this high.`;
+  } else if (valuePercent <= 15) {
+    proof = `Best-value territory: top ${valuePercent}% for performance per dollar.`;
+  } else {
+    proof = `Standout strength: top ${strongest.percent}% of all gums for ${strongest.label}.`;
+  }
+
+  return {
+    proof,
+    pitch: `${gum.name} is a strong pick for ${strongest.benefit}. ${gum.perk}`,
+  };
+}
+
+function renderGumDetail() {
+  const gum = gums.find((item) => item.id === selectedDetailGumId);
+  if (!gum) return;
+
+  const owned = state.unlocked.includes(gum.id);
+  const canBuy = state.cash >= gum.price;
+  const positioning = gumPositioning(gum);
+  const comparisons = gumComparisons(gum);
+
+  els.gumDetailModal.style.setProperty("--detail-color", gum.color);
+  els.detailPackArt.style.background = gum.color;
+  els.detailPackArt.textContent = gum.shortName;
+  els.detailTier.textContent = `Tier ${gum.tier}`;
+  els.detailName.textContent = gum.name;
+  els.detailFlavor.textContent = gum.flavor;
+  els.detailProof.textContent = positioning.proof;
+  els.detailPitch.textContent = positioning.pitch;
+  els.detailStats.innerHTML = `
+    <div><span>Price</span><strong>${formatMoney(gum.price)}</strong></div>
+    <div><span>Wall speed</span><strong>${gum.wallSpeed.toFixed(2)}x</strong></div>
+    <div><span>Cash yield</span><strong>${gum.yieldMultiplier.toFixed(2)}x</strong></div>
+    <div><span>Bubble cap</span><strong>${gum.maxBubble}px</strong></div>
+    <div><span>Steering</span><strong>${gum.steerSpeed.toFixed(0)}</strong></div>
+    <div><span>Growth</span><strong>${gum.bubbleGrowth.toFixed(2)}x</strong></div>
+  `;
+  els.detailComparisons.innerHTML = comparisons.map((comparison) => `<li>${comparison}</li>`).join("");
+  els.detailAction.textContent = owned
+    ? gum.id === state.activeGumId ? "Equipped" : "Equip this gum"
+    : canBuy ? `Buy for ${formatMoney(gum.price)}` : `Need ${formatMoney(gum.price - state.cash)} more`;
+  els.detailAction.disabled = (owned && gum.id === state.activeGumId) || (!owned && !canBuy);
+  els.detailAction.classList.toggle("secondary", owned);
+}
+
+function openGumDetail(id) {
+  selectedDetailGumId = id;
+  renderGumDetail();
+  els.gumDetailModal.classList.remove("hidden");
+}
+
+function closeGumDetail() {
+  els.gumDetailModal.classList.add("hidden");
+}
+
+function handleDetailAction() {
+  const gum = gums.find((item) => item.id === selectedDetailGumId);
+  if (!gum) return;
+  if (state.unlocked.includes(gum.id)) {
+    equipGum(gum.id);
+  } else {
+    buyGum(gum.id);
+  }
+  renderGumDetail();
 }
 
 function equipGum(id) {
@@ -537,6 +762,7 @@ function buyGum(id) {
 function startAttempt() {
   const now = performance.now();
   const rewardMultiplier = state.nextRoundMultiplier;
+  startMusic();
   inputDirection = 1;
   game = {
     ...createIdleGame(),
@@ -673,6 +899,60 @@ function closeShop() {
   els.shopModal.classList.add("hidden");
 }
 
+function openSettings() {
+  renderAudioSettings();
+  els.settingsModal.classList.remove("hidden");
+}
+
+function closeSettings() {
+  els.settingsModal.classList.add("hidden");
+}
+
+function openResetConfirm() {
+  els.resetConfirmModal.classList.remove("hidden");
+}
+
+function closeResetConfirm() {
+  els.resetConfirmModal.classList.add("hidden");
+}
+
+function renderAudioSettings() {
+  const musicPercent = Math.round(audioSettings.musicVolume * 100);
+  const gamePercent = Math.round(audioSettings.gameVolume * 100);
+  els.musicVolume.value = musicPercent;
+  els.musicVolumeValue.textContent = `${musicPercent}%`;
+  els.gameVolume.value = gamePercent;
+  els.gameVolumeValue.textContent = `${gamePercent}%`;
+}
+
+function updateAudioSetting(type, value) {
+  audioSettings[type] = Math.max(0, Math.min(1, Number(value) / 100));
+  saveAudioSettings();
+  applyAudioLevels();
+  renderAudioSettings();
+}
+
+function resetProgress() {
+  if (game.animationFrame) cancelAnimationFrame(game.animationFrame);
+  game = createIdleGame();
+  inputDirection = 1;
+  state = createDefaultState();
+  saveState();
+
+  els.bubble.classList.remove("pop");
+  els.bubbleZone.classList.remove("shake");
+  hideSummary();
+  closeShop();
+  closeGumDetail();
+  closeSettings();
+  closeResetConfirm();
+  render();
+  renderInventory();
+  renderShop();
+  showToast("Progress reset. Your fresh pack is ready.", "bonus");
+  playTone(440, 0.1, "triangle", 0.045);
+}
+
 function setDirection(direction) {
   inputDirection = direction;
   render();
@@ -695,39 +975,150 @@ function showToast(message, tone = "success") {
   }, 3200);
 }
 
-function playTone(frequency, duration, type = "sine", gainValue = 0.04) {
+function ensureAudio() {
   try {
-    audioContext ||= new (window.AudioContext || window.webkitAudioContext)();
+    if (!audioContext) {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      musicGain = audioContext.createGain();
+      gameGain = audioContext.createGain();
+      musicGain.connect(audioContext.destination);
+      gameGain.connect(audioContext.destination);
+      applyAudioLevels();
+    }
+
+    if (audioContext.state === "suspended") audioContext.resume();
+    return true;
+  } catch {
+    audioContext = null;
+    musicGain = null;
+    gameGain = null;
+    return false;
+  }
+}
+
+function applyAudioLevels() {
+  if (!audioContext || !musicGain || !gameGain) return;
+  const now = audioContext.currentTime;
+  musicGain.gain.setTargetAtTime(audioSettings.musicVolume, now, 0.025);
+  gameGain.gain.setTargetAtTime(audioSettings.gameVolume, now, 0.025);
+}
+
+function startMusic() {
+  if (!ensureAudio() || musicTimer) return;
+  playMusicStep();
+  musicTimer = window.setInterval(playMusicStep, 245);
+}
+
+function playMusicStep() {
+  if (!audioContext || !musicGain) return;
+  if (document.hidden || audioContext.state !== "running") {
+    musicStep += 1;
+    return;
+  }
+  const now = audioContext.currentTime;
+  const note = audioContext.createOscillator();
+  const noteEnvelope = audioContext.createGain();
+
+  note.type = musicStep % 4 === 2 ? "sine" : "triangle";
+  note.frequency.value = MUSIC_NOTES[musicStep % MUSIC_NOTES.length];
+  noteEnvelope.gain.setValueAtTime(0.0001, now);
+  noteEnvelope.gain.exponentialRampToValueAtTime(0.085, now + 0.018);
+  noteEnvelope.gain.exponentialRampToValueAtTime(0.0001, now + 0.2);
+  note.connect(noteEnvelope).connect(musicGain);
+  note.start(now);
+  note.stop(now + 0.21);
+
+  if (musicStep % 4 === 0) {
+    const bass = audioContext.createOscillator();
+    const bassEnvelope = audioContext.createGain();
+    bass.type = "sine";
+    bass.frequency.value = MUSIC_BASS[Math.floor(musicStep / 4) % MUSIC_BASS.length];
+    bassEnvelope.gain.setValueAtTime(0.0001, now);
+    bassEnvelope.gain.exponentialRampToValueAtTime(0.06, now + 0.02);
+    bassEnvelope.gain.exponentialRampToValueAtTime(0.0001, now + 0.38);
+    bass.connect(bassEnvelope).connect(musicGain);
+    bass.start(now);
+    bass.stop(now + 0.4);
+  }
+
+  musicStep += 1;
+}
+
+function playTone(frequency, duration, type = "sine", gainValue = 0.04) {
+  if (!ensureAudio()) return;
+  try {
     const oscillator = audioContext.createOscillator();
     const gain = audioContext.createGain();
     oscillator.type = type;
     oscillator.frequency.value = frequency;
-    gain.gain.value = gainValue;
+    gain.gain.setValueAtTime(gainValue, audioContext.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + duration);
-    oscillator.connect(gain).connect(audioContext.destination);
+    oscillator.connect(gain).connect(gameGain);
     oscillator.start();
     oscillator.stop(audioContext.currentTime + duration);
-  } catch {
-    audioContext = null;
-  }
+  } catch {}
 }
 
 function playPop() {
-  playTone(130, 0.08, "sawtooth", 0.06);
-  setTimeout(() => playTone(72, 0.09, "square", 0.035), 60);
+  if (!ensureAudio()) return;
+  const now = audioContext.currentTime;
+  const sampleCount = Math.floor(audioContext.sampleRate * 0.12);
+  const noiseBuffer = audioContext.createBuffer(1, sampleCount, audioContext.sampleRate);
+  const samples = noiseBuffer.getChannelData(0);
+  for (let index = 0; index < sampleCount; index += 1) {
+    samples[index] = (Math.random() * 2 - 1) * (1 - index / sampleCount);
+  }
+
+  const noise = audioContext.createBufferSource();
+  const noiseFilter = audioContext.createBiquadFilter();
+  const noiseEnvelope = audioContext.createGain();
+  noise.buffer = noiseBuffer;
+  noiseFilter.type = "highpass";
+  noiseFilter.frequency.value = 680;
+  noiseEnvelope.gain.setValueAtTime(0.13, now);
+  noiseEnvelope.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+  noise.connect(noiseFilter).connect(noiseEnvelope).connect(gameGain);
+  noise.start(now);
+
+  playTone(190, 0.08, "sawtooth", 0.07);
+  setTimeout(() => playTone(76, 0.13, "sine", 0.055), 45);
 }
 
 els.playButton.addEventListener("click", startAttempt);
 els.playAgainButton.addEventListener("click", startAttempt);
 els.shopButton.addEventListener("click", openShop);
+els.settingsButton.addEventListener("click", openSettings);
 els.closeShopButton.addEventListener("click", closeShop);
+els.closeGumDetailButton.addEventListener("click", closeGumDetail);
+els.detailAction.addEventListener("click", handleDetailAction);
+els.closeSettingsButton.addEventListener("click", closeSettings);
 els.shopSearch.addEventListener("input", renderShop);
+els.musicVolume.addEventListener("input", (event) => {
+  updateAudioSetting("musicVolume", event.target.value);
+  if (Number(event.target.value) > 0) startMusic();
+});
+els.gameVolume.addEventListener("input", (event) => {
+  updateAudioSetting("gameVolume", event.target.value);
+});
+els.gameVolume.addEventListener("change", () => playTone(620, 0.08, "triangle", 0.05));
+els.restartButton.addEventListener("click", openResetConfirm);
+els.cancelResetButton.addEventListener("click", closeResetConfirm);
+els.confirmResetButton.addEventListener("click", resetProgress);
 
 els.summaryModal.addEventListener("click", (event) => {
   if (event.target === els.summaryModal) hideSummary();
 });
 els.shopModal.addEventListener("click", (event) => {
   if (event.target === els.shopModal) closeShop();
+});
+els.gumDetailModal.addEventListener("click", (event) => {
+  if (event.target === els.gumDetailModal) closeGumDetail();
+});
+els.settingsModal.addEventListener("click", (event) => {
+  if (event.target === els.settingsModal) closeSettings();
+});
+els.resetConfirmModal.addEventListener("click", (event) => {
+  if (event.target === els.resetConfirmModal) closeResetConfirm();
 });
 
 els.leftButton.addEventListener("pointerdown", () => setDirection(-1));
@@ -756,11 +1147,24 @@ window.addEventListener("keydown", (event) => {
   }
 
   if (event.key === "Escape") {
+    closeResetConfirm();
+    closeSettings();
+    closeGumDetail();
     closeShop();
     hideSummary();
+  }
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (!audioContext) return;
+  if (document.hidden) {
+    audioContext.suspend();
+  } else if (musicTimer) {
+    audioContext.resume();
   }
 });
 
 render();
 renderInventory();
 renderShop();
+renderAudioSettings();

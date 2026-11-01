@@ -26,6 +26,9 @@
             <button class="icon-button" id="shopButton" type="button" aria-label="Open gum shop" title="Gum shop">
               Shop
             </button>
+            <button class="icon-button" id="settingsButton" type="button" aria-label="Open settings" title="Settings">
+              Settings
+            </button>
           </div>
         </header>
 
@@ -166,6 +169,88 @@
         </div>
         <input class="shop-search" id="shopSearch" type="search" placeholder="Search 55 flavors" aria-label="Search gum flavors">
         <div class="shop-list" id="shopList"></div>
+      </div>
+    </div>
+
+    <div class="modal hidden gum-detail-modal" id="gumDetailModal" role="dialog" aria-modal="true" aria-labelledby="detailName">
+      <div class="modal-card gum-detail-card">
+        <div class="detail-head">
+          <div class="detail-identity">
+            <div class="pack-art detail-pack" id="detailPackArt">SS</div>
+            <div>
+              <p class="eyebrow" id="detailTier">Tier 1</p>
+              <h2 id="detailName">Starter Slab</h2>
+              <p id="detailFlavor">Thin, stiff, and barely bubble-ready.</p>
+            </div>
+          </div>
+          <button class="icon-button" id="closeGumDetailButton" type="button" aria-label="Close gum details" title="Close">
+            Close
+          </button>
+        </div>
+
+        <div class="detail-proof" id="detailProof">The free benchmark every other gum is measured against.</div>
+        <p class="detail-pitch" id="detailPitch"></p>
+
+        <div class="detail-stat-grid" id="detailStats"></div>
+
+        <section class="comparison-section" aria-labelledby="comparisonTitle">
+          <h3 id="comparisonTitle">Compared with Starter Slab</h3>
+          <ul id="detailComparisons"></ul>
+        </section>
+
+        <button class="gum-action detail-primary" id="detailAction" type="button">Equipped</button>
+      </div>
+    </div>
+
+    <div class="modal hidden" id="settingsModal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+      <div class="modal-card settings-card">
+        <div class="settings-head">
+          <div>
+            <p class="eyebrow">Settings</p>
+            <h2 id="settingsTitle">Sound and progress</h2>
+          </div>
+          <button class="icon-button" id="closeSettingsButton" type="button" aria-label="Close settings" title="Close">
+            Close
+          </button>
+        </div>
+
+        <div class="volume-settings">
+          <label class="volume-control" for="musicVolume">
+            <span>
+              <strong>Music</strong>
+              <output id="musicVolumeValue" for="musicVolume">35%</output>
+            </span>
+            <input id="musicVolume" type="range" min="0" max="100" step="1" value="35">
+          </label>
+
+          <label class="volume-control" for="gameVolume">
+            <span>
+              <strong>Game sounds</strong>
+              <output id="gameVolumeValue" for="gameVolume">70%</output>
+            </span>
+            <input id="gameVolume" type="range" min="0" max="100" step="1" value="70">
+          </label>
+        </div>
+
+        <section class="reset-zone" aria-labelledby="resetTitle">
+          <div>
+            <h3 id="resetTitle">Restart progress</h3>
+            <p>Return to the starter gum and erase your cash, records, inventory, and streaks.</p>
+          </div>
+          <button class="danger-button" id="restartButton" type="button">Restart progress</button>
+        </section>
+      </div>
+    </div>
+
+    <div class="modal hidden confirm-modal" id="resetConfirmModal" role="alertdialog" aria-modal="true" aria-labelledby="resetConfirmTitle" aria-describedby="resetConfirmText">
+      <div class="modal-card confirm-card">
+        <p class="eyebrow">One last check</p>
+        <h2 id="resetConfirmTitle">Are you sure?</h2>
+        <p id="resetConfirmText">This permanently erases all game progress on this device. Your sound settings will stay the same.</p>
+        <div class="confirm-actions">
+          <button class="secondary-button" id="cancelResetButton" type="button">Keep my progress</button>
+          <button class="danger-button" id="confirmResetButton" type="button">Yes, restart everything</button>
+        </div>
       </div>
     </div>
 
