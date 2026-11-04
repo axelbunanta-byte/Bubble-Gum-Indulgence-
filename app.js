@@ -11,6 +11,31 @@ const MULTIPLIER_TIERS = [
   { seconds: 16, multiplier: 5, name: "Super" },
   { seconds: 12, multiplier: 2, name: "Boost" },
 ];
+const RUN_CALLOUTS = [
+  { seconds: 5, message: "Nice stretch!" },
+  { seconds: 10, message: "Bubble breaker!" },
+  { seconds: 15, message: "Pressure rising!" },
+  { seconds: 20, message: "Bubble legend!" },
+  { seconds: 30, message: "Unpoppable!" },
+];
+const ACHIEVEMENTS = [
+  { id: "first-pop", title: "First Pop", detail: "Finish 1 Challenge run", type: "runs", target: 1 },
+  { id: "ten-seconds", title: "Bubble Rookie", detail: "Survive 10 seconds", type: "time", target: 10 },
+  { id: "twenty-seconds", title: "Pressure Pro", detail: "Survive 20 seconds", type: "time", target: 20 },
+  { id: "thirty-seconds", title: "Bubble Legend", detail: "Survive 30 seconds", type: "time", target: 30 },
+  { id: "five-gums", title: "Flavor Scout", detail: "Own 5 gums", type: "gums", target: 5 },
+  { id: "fifteen-gums", title: "Gum Collector", detail: "Own 15 gums", type: "gums", target: 15 },
+  { id: "all-gums", title: "Shelf Complete", detail: "Own all 55 gums", type: "gums", target: 55 },
+  { id: "click-frenzy", title: "Click Frenzy", detail: "Use 50 clicks in one run", type: "clicks", target: 50 },
+];
+const FICTIONAL_LEADERBOARD = [
+  { name: "BubbleBot_87", time: 42.8, gum: "Gelato Glow" },
+  { name: "ChewChamp", time: 34.6, gum: "Churro Charge" },
+  { name: "MintyMeteor", time: 27.3, gum: "Mint Orbit" },
+  { name: "GummyGhost", time: 21.7, gum: "Marshmallow Melt" },
+  { name: "PopPilot", time: 15.4, gum: "Pink Pop Roll" },
+  { name: "SugarStatic", time: 9.8, gum: "Starter Slab" },
+];
 
 const gums = [
   {
@@ -252,6 +277,9 @@ const defaultState = {
   bestBubble: 0,
   streakTimes: [],
   nextRoundMultiplier: 1,
+  runs: 0,
+  bestClicks: 0,
+  achievements: [],
 };
 
 const defaultInfiniteState = {
@@ -306,6 +334,8 @@ const els = {
   welcomeModal: document.querySelector("#welcomeModal"),
   welcomeChallengeButton: document.querySelector("#welcomeChallengeButton"),
   welcomeInfiniteButton: document.querySelector("#welcomeInfiniteButton"),
+  achievementsButton: document.querySelector("#achievementsButton"),
+  leaderboardButton: document.querySelector("#leaderboardButton"),
   labStage: document.querySelector("#labStage"),
   labBubble: document.querySelector("#labBubble"),
   labBubbleText: document.querySelector("#labBubbleText"),
@@ -325,6 +355,7 @@ const els = {
   inventoryButton: document.querySelector("#inventoryButton"),
   settingsButton: document.querySelector("#settingsButton"),
   bubbleZone: document.querySelector("#bubbleZone"),
+  gameCard: document.querySelector("#gameCard"),
   bubble: document.querySelector("#bubble"),
   bubbleText: document.querySelector("#bubbleText"),
   gumLabel: document.querySelector("#gumLabel"),
@@ -388,6 +419,14 @@ const els = {
   resetConfirmModal: document.querySelector("#resetConfirmModal"),
   cancelResetButton: document.querySelector("#cancelResetButton"),
   confirmResetButton: document.querySelector("#confirmResetButton"),
+  achievementsModal: document.querySelector("#achievementsModal"),
+  closeAchievementsButton: document.querySelector("#closeAchievementsButton"),
+  achievementCount: document.querySelector("#achievementCount"),
+  achievementList: document.querySelector("#achievementList"),
+  leaderboardModal: document.querySelector("#leaderboardModal"),
+  closeLeaderboardButton: document.querySelector("#closeLeaderboardButton"),
+  leaderboardList: document.querySelector("#leaderboardList"),
+  splatterLayer: document.querySelector("#splatterLayer"),
   recordBurst: document.querySelector("#recordBurst"),
   toast: document.querySelector("#toast"),
 };
@@ -410,6 +449,9 @@ function createIdleGame() {
     rewardMultiplier: 1,
     clicks: 0,
     clickBonusPercent: 0,
+    lastInflationSoundAt: 0,
+    calloutsShown: [],
+    recordAlerted: false,
   };
 }
 
@@ -451,6 +493,11 @@ function loadState() {
       nextRoundMultiplier: [2, 5, 10].includes(saved.nextRoundMultiplier)
         ? saved.nextRoundMultiplier
         : 1,
+      runs: Number.isInteger(saved.runs) ? Math.max(0, saved.runs) : 0,
+      bestClicks: Number.isInteger(saved.bestClicks) ? Math.max(0, saved.bestClicks) : 0,
+      achievements: Array.isArray(saved.achievements)
+        ? saved.achievements.filter((id) => ACHIEVEMENTS.some((achievement) => achievement.id === id))
+        : [],
     };
   } catch {
     return createDefaultState();
@@ -462,6 +509,7 @@ function createDefaultState() {
     ...defaultState,
     unlocked: [...defaultState.unlocked],
     streakTimes: [],
+    achievements: [],
   };
 }
 
@@ -615,6 +663,8 @@ function render() {
       ? 150
       : Math.max(140, Math.min(state.bestBubble || 150, gum.maxBubble));
   const bubbleSize = visualBubbleSize(rawBubbleSize, gum);
+  const pressureProgress = game.active ? Math.min(1, game.elapsed / 30) : 0;
+  const screenShake = game.active ? Math.min(3.5, Math.max(0, (game.elapsed - 5) * 0.14)) : 0;
 
   els.cash.textContent = infiniteMode ? "∞" : formatMoney(state.cash);
   els.secondaryStatLabel.textContent = infiniteMode ? "Freedom" : "Best";
@@ -643,6 +693,14 @@ function render() {
   els.arcade.style.setProperty("--gum-color", gum.color);
   els.arcade.style.setProperty("--gum-ink", readableTextColor(gum.color));
   els.bubble.style.setProperty("--bubble-size", `${bubbleSize}px`);
+  els.bubble.style.setProperty("--gum-strength", `${88 - pressureProgress * 52}%`);
+  els.bubble.style.setProperty("--gum-shadow-strength", `${76 - pressureProgress * 42}%`);
+  els.bubble.style.setProperty("--wobble-angle", `${0.5 + pressureProgress * 2.5}deg`);
+  els.bubble.style.setProperty("--wobble-speed", `${Math.max(0.38, 1.05 - pressureProgress * 0.62)}s`);
+  els.bubble.classList.toggle("pressure-wobble", game.active && game.elapsed > 3);
+  els.gameCard.style.setProperty("--screen-shake", `${screenShake}px`);
+  els.gameCard.style.setProperty("--screen-shake-negative", `${-screenShake}px`);
+  els.gameCard.classList.toggle("run-shake", game.active && game.elapsed > 5);
   els.track.style.setProperty("--left-wall", `${game.leftWall}%`);
   els.track.style.setProperty("--right-wall", `${game.rightWall}%`);
   els.track.style.setProperty("--chip-x", `${game.chip}%`);
@@ -658,6 +716,8 @@ function render() {
   els.playButton.disabled = game.active || countdownActive;
   els.settingsButton.disabled = game.active || countdownActive;
   els.inventoryButton.disabled = game.active || countdownActive;
+  els.achievementsButton.disabled = game.active || countdownActive;
+  els.leaderboardButton.disabled = game.active || countdownActive;
   els.modeShopButton.disabled = game.active || countdownActive;
   els.labModeButton.disabled = game.active || countdownActive;
   els.challengeModeButton.disabled = game.active || countdownActive;
@@ -1001,6 +1061,7 @@ function buyGum(id) {
   const gum = gums.find((item) => item.id === id);
   const collection = activeCollection();
   const infiniteMode = currentMode === "infinite";
+  let newAchievements = [];
   if (!gum || collection.unlocked.includes(id) || (!infiniteMode && state.cash < gum.price)) return;
 
   if (infiniteMode) {
@@ -1011,12 +1072,16 @@ function buyGum(id) {
     state.cash -= gum.price;
     state.unlocked.push(id);
     state.activeGumId = id;
+    newAchievements = unlockAchievements();
     saveState();
   }
   playTone(680, 0.09, "triangle", 0.05);
   render();
   renderInventory();
   renderShop();
+  if (newAchievements.length > 0) {
+    showToast(`Achievement unlocked: ${newAchievements[0].title}`, "bonus");
+  }
 }
 
 function beginLabInflation(event) {
@@ -1068,6 +1133,8 @@ function releaseLabBubble() {
 
 function createPopParticles(color, amount) {
   els.popParticles.innerHTML = "";
+  els.splatterLayer.innerHTML = "";
+  els.splatterLayer.classList.remove("show");
   for (let index = 0; index < amount; index += 1) {
     const particle = document.createElement("span");
     const angle = (Math.PI * 2 * index) / amount + Math.random() * 0.25;
@@ -1207,6 +1274,29 @@ function tick(now) {
   const growthProgress = Math.min(1, wallPressure * gum.bubbleGrowth);
   game.bubbleSize = 140 + (gum.maxBubble - 140) * growthProgress;
 
+  const soundInterval = Math.max(0.34, 0.88 - growthProgress * 0.42);
+  if (game.elapsed - game.lastInflationSoundAt >= soundInterval) {
+    game.lastInflationSoundAt = game.elapsed;
+    playInflationSound(growthProgress, Math.floor(game.elapsed / soundInterval) % 3 === 2);
+  }
+
+  const nextCallout = RUN_CALLOUTS.find(
+    (callout) => game.elapsed >= callout.seconds && !game.calloutsShown.includes(callout.seconds)
+  );
+  if (nextCallout) {
+    game.calloutsShown.push(nextCallout.seconds);
+    showToast(`${nextCallout.seconds}s · ${nextCallout.message}`, "bonus");
+    playTone(680 + nextCallout.seconds * 8, 0.12, "triangle", 0.04);
+  }
+
+  if (currentMode === "challenge" && state.bestTime > 0 && game.elapsed > state.bestTime && !game.recordAlerted) {
+    game.recordAlerted = true;
+    els.recordBurst.textContent = "New high score";
+    els.recordBurst.classList.remove("show");
+    requestAnimationFrame(() => els.recordBurst.classList.add("show"));
+    showToast("New high score — keep going!", "bonus");
+  }
+
   const min = game.leftWall + gum.collisionPadding;
   const max = 100 - game.rightWall - gum.collisionPadding;
 
@@ -1229,12 +1319,14 @@ function popAttempt() {
   const isRecord = finalTime > state.bestTime;
   const usedMultiplier = game.rewardMultiplier;
   let streakMessage = "";
+  let newAchievements = [];
 
   game.active = false;
   cancelAnimationFrame(game.animationFrame);
 
   els.bubble.classList.add("pop");
   els.bubbleZone.classList.add("shake");
+  createSplatters(activeGum().color);
   playPop();
 
   if (infiniteMode) {
@@ -1248,6 +1340,8 @@ function popAttempt() {
   }
 
   state.cash += finalCash;
+  state.runs += 1;
+  state.bestClicks = Math.max(state.bestClicks, game.clicks);
   state.bestTime = Math.max(state.bestTime, finalTime);
   state.bestBubble = Math.max(state.bestBubble, finalBubble);
 
@@ -1273,6 +1367,7 @@ function popAttempt() {
     }
     state.streakTimes = [];
   }
+  newAchievements = unlockAchievements();
   saveState();
   renderShop();
 
@@ -1287,7 +1382,10 @@ function popAttempt() {
     els.bubbleZone.classList.remove("shake");
     showSummary(finalTime, finalCash, isRecord, usedMultiplier, false, game.clickBonusPercent);
     render();
-    if (streakMessage) {
+    if (newAchievements.length > 0) {
+      const extra = newAchievements.length > 1 ? ` +${newAchievements.length - 1} more` : "";
+      showToast(`Achievement: ${newAchievements[0].title}${extra}`, "bonus");
+    } else if (streakMessage) {
       showToast(streakMessage, multiplierTone(state.nextRoundMultiplier));
     }
   }, 360);
@@ -1324,6 +1422,81 @@ function closeInventory() {
 function focusShop() {
   els.shopPanel.scrollIntoView({ behavior: "smooth", block: "start" });
   els.shopSearch.focus({ preventScroll: true });
+}
+
+function achievementProgress(achievement) {
+  if (achievement.type === "runs") return state.runs;
+  if (achievement.type === "time") return Math.floor(state.bestTime);
+  if (achievement.type === "gums") return state.unlocked.length;
+  if (achievement.type === "clicks") return state.bestClicks;
+  return 0;
+}
+
+function unlockAchievements() {
+  const newlyUnlocked = [];
+  ACHIEVEMENTS.forEach((achievement) => {
+    if (state.achievements.includes(achievement.id)) return;
+    if (achievementProgress(achievement) < achievement.target) return;
+    state.achievements.push(achievement.id);
+    newlyUnlocked.push(achievement);
+  });
+  return newlyUnlocked;
+}
+
+function renderAchievements() {
+  els.achievementCount.textContent = `${state.achievements.length} / ${ACHIEVEMENTS.length} unlocked`;
+  els.achievementList.innerHTML = ACHIEVEMENTS.map((achievement) => {
+    const unlocked = state.achievements.includes(achievement.id);
+    const progress = Math.min(achievement.target, achievementProgress(achievement));
+    return `
+      <article class="achievement-item${unlocked ? " unlocked" : ""}">
+        <span class="achievement-mark">${unlocked ? "✓" : "○"}</span>
+        <div>
+          <h3>${achievement.title}</h3>
+          <p>${achievement.detail}</p>
+        </div>
+        <strong>${unlocked ? "Done" : `${progress} / ${achievement.target}`}</strong>
+      </article>
+    `;
+  }).join("");
+}
+
+function openAchievements() {
+  renderAchievements();
+  els.achievementsModal.classList.remove("hidden");
+}
+
+function closeAchievements() {
+  els.achievementsModal.classList.add("hidden");
+}
+
+function renderLeaderboard() {
+  const player = {
+    name: "YOU",
+    time: state.bestTime,
+    gum: gums.find((gum) => gum.id === state.activeGumId)?.name || "Starter Slab",
+    player: true,
+  };
+  const entries = [...FICTIONAL_LEADERBOARD, player].sort((first, second) => second.time - first.time);
+  els.leaderboardList.innerHTML = entries.map((entry, index) => `
+    <article class="leaderboard-row${entry.player ? " player" : ""}">
+      <strong class="leaderboard-rank">${index + 1}</strong>
+      <div>
+        <h3>${entry.name}</h3>
+        <p>${entry.player && entry.time === 0 ? "Finish a Challenge run to rank" : entry.gum}</p>
+      </div>
+      <strong>${entry.time > 0 ? formatTime(entry.time) : "—"}</strong>
+    </article>
+  `).join("");
+}
+
+function openLeaderboard() {
+  renderLeaderboard();
+  els.leaderboardModal.classList.remove("hidden");
+}
+
+function closeLeaderboard() {
+  els.leaderboardModal.classList.add("hidden");
 }
 
 function openSettings() {
@@ -1380,9 +1553,13 @@ function resetProgress() {
   els.labBubble.style.setProperty("--lab-stretch-x", "1");
   els.labBubble.style.setProperty("--lab-stretch-y", "1");
   els.popParticles.innerHTML = "";
+  els.splatterLayer.innerHTML = "";
+  els.splatterLayer.classList.remove("show");
   els.labMessage.textContent = "Infinite wallet active. Choose any gum, inflate it, stretch it, and pop without limits.";
   hideSummary();
   closeInventory();
+  closeAchievements();
+  closeLeaderboard();
   closeGumDetail();
   closeSettings();
   closeResetConfirm();
@@ -1507,10 +1684,55 @@ function playTone(frequency, duration, type = "sine", gainValue = 0.04) {
   } catch {}
 }
 
+function playInflationSound(progress, squish = false) {
+  if (!ensureAudio()) return;
+  try {
+    const now = audioContext.currentTime;
+    const oscillator = audioContext.createOscillator();
+    const filter = audioContext.createBiquadFilter();
+    const envelope = audioContext.createGain();
+    oscillator.type = squish ? "triangle" : "sine";
+    oscillator.frequency.setValueAtTime(105 + progress * 80, now);
+    oscillator.frequency.exponentialRampToValueAtTime(165 + progress * 130, now + 0.16);
+    filter.type = "lowpass";
+    filter.frequency.value = 620 + progress * 520;
+    envelope.gain.setValueAtTime(0.0001, now);
+    envelope.gain.exponentialRampToValueAtTime(squish ? 0.055 : 0.035, now + 0.025);
+    envelope.gain.exponentialRampToValueAtTime(0.0001, now + 0.19);
+    oscillator.connect(filter).connect(envelope).connect(gameGain);
+    oscillator.start(now);
+    oscillator.stop(now + 0.2);
+
+    if (squish) {
+      setTimeout(() => playTone(82 + progress * 45, 0.1, "sawtooth", 0.025), 65);
+    }
+  } catch {}
+}
+
+function createSplatters(color) {
+  els.splatterLayer.innerHTML = "";
+  for (let index = 0; index < 16; index += 1) {
+    const splat = document.createElement("span");
+    const size = 14 + Math.random() * 54;
+    splat.style.setProperty("--splat-color", color);
+    splat.style.setProperty("--splat-size", `${size}px`);
+    splat.style.setProperty("--splat-x", `${12 + Math.random() * 76}vw`);
+    splat.style.setProperty("--splat-y", `${8 + Math.random() * 82}vh`);
+    splat.style.setProperty("--splat-rotate", `${Math.random() * 180}deg`);
+    splat.style.setProperty("--splat-delay", `${Math.random() * 90}ms`);
+    els.splatterLayer.append(splat);
+  }
+  requestAnimationFrame(() => els.splatterLayer.classList.add("show"));
+  setTimeout(() => {
+    els.splatterLayer.classList.remove("show");
+    els.splatterLayer.innerHTML = "";
+  }, 1800);
+}
+
 function playPop() {
   if (!ensureAudio()) return;
   const now = audioContext.currentTime;
-  const sampleCount = Math.floor(audioContext.sampleRate * 0.12);
+  const sampleCount = Math.floor(audioContext.sampleRate * 0.22);
   const noiseBuffer = audioContext.createBuffer(1, sampleCount, audioContext.sampleRate);
   const samples = noiseBuffer.getChannelData(0);
   for (let index = 0; index < sampleCount; index += 1) {
@@ -1522,14 +1744,15 @@ function playPop() {
   const noiseEnvelope = audioContext.createGain();
   noise.buffer = noiseBuffer;
   noiseFilter.type = "highpass";
-  noiseFilter.frequency.value = 680;
-  noiseEnvelope.gain.setValueAtTime(0.13, now);
-  noiseEnvelope.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+  noiseFilter.frequency.value = 460;
+  noiseEnvelope.gain.setValueAtTime(0.2, now);
+  noiseEnvelope.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
   noise.connect(noiseFilter).connect(noiseEnvelope).connect(gameGain);
   noise.start(now);
 
-  playTone(190, 0.08, "sawtooth", 0.07);
-  setTimeout(() => playTone(76, 0.13, "sine", 0.055), 45);
+  playTone(190, 0.11, "sawtooth", 0.1);
+  playTone(330, 0.05, "square", 0.055);
+  setTimeout(() => playTone(62, 0.25, "sine", 0.09), 40);
 }
 
 els.playButton.addEventListener("click", startAttempt);
@@ -1545,9 +1768,13 @@ els.popButton.addEventListener("click", popLabBubble);
 window.addEventListener("pointerup", releaseLabBubble);
 window.addEventListener("pointercancel", releaseLabBubble);
 els.inventoryButton.addEventListener("click", openInventory);
+els.achievementsButton.addEventListener("click", openAchievements);
+els.leaderboardButton.addEventListener("click", openLeaderboard);
 els.modeShopButton.addEventListener("click", focusShop);
 els.settingsButton.addEventListener("click", openSettings);
 els.closeInventoryButton.addEventListener("click", closeInventory);
+els.closeAchievementsButton.addEventListener("click", closeAchievements);
+els.closeLeaderboardButton.addEventListener("click", closeLeaderboard);
 els.closeGumDetailButton.addEventListener("click", closeGumDetail);
 els.detailAction.addEventListener("click", handleDetailAction);
 els.closeSettingsButton.addEventListener("click", closeSettings);
@@ -1569,6 +1796,12 @@ els.summaryModal.addEventListener("click", (event) => {
 });
 els.inventoryModal.addEventListener("click", (event) => {
   if (event.target === els.inventoryModal) closeInventory();
+});
+els.achievementsModal.addEventListener("click", (event) => {
+  if (event.target === els.achievementsModal) closeAchievements();
+});
+els.leaderboardModal.addEventListener("click", (event) => {
+  if (event.target === els.leaderboardModal) closeLeaderboard();
 });
 els.gumDetailModal.addEventListener("click", (event) => {
   if (event.target === els.gumDetailModal) closeGumDetail();
@@ -1613,6 +1846,8 @@ window.addEventListener("keydown", (event) => {
     closeSettings();
     closeGumDetail();
     closeInventory();
+    closeAchievements();
+    closeLeaderboard();
     hideSummary();
   }
 });
