@@ -12,19 +12,19 @@
         <header class="hud">
           <div>
             <p class="eyebrow">Bubble Gum Indulgence</p>
-            <h1 id="gameTitle">Bubble Gum Dopamine Arcade</h1>
+            <h1 id="gameTitle">Bubble Gum Challenge</h1>
           </div>
           <div class="hud-actions">
-            <div class="stat-pill">
+            <div class="stat-pill" id="cashPill">
               <span>Cash</span>
               <strong id="cash">$0</strong>
             </div>
             <div class="stat-pill">
-              <span>Best</span>
+              <span id="secondaryStatLabel">Best</span>
               <strong id="bestTime">0.0s</strong>
             </div>
-            <button class="icon-button" id="shopButton" type="button" aria-label="Open gum shop" title="Gum shop">
-              Shop
+            <button class="icon-button" id="inventoryButton" type="button" aria-label="Open inventory" title="Inventory">
+              Inventory
             </button>
             <button class="icon-button" id="settingsButton" type="button" aria-label="Open settings" title="Settings">
               Settings
@@ -32,62 +32,128 @@
           </div>
         </header>
 
-        <section class="game-card" aria-label="Bubble game">
-          <div class="bubble-zone" id="bubbleZone">
-            <div class="record-burst" id="recordBurst">New record</div>
-            <div class="bubble" id="bubble">
-              <span id="bubbleText">Ready</span>
-            </div>
-            <div class="gum-label" id="gumLabel">Starter Slab</div>
+        <nav class="mode-switch" aria-label="Experience mode">
+          <button class="active" id="challengeModeButton" type="button" aria-pressed="true">Challenge</button>
+          <button id="labModeButton" type="button" aria-pressed="false">Infinite</button>
+        </nav>
+
+        <section class="mode-explainer" id="modeExplainer" aria-labelledby="modeName">
+          <div class="mode-copy">
+            <p class="eyebrow" id="modeKicker">Earn your way up.</p>
+            <h2 id="modeName">Challenge Mode</h2>
+            <p id="modeDescription">
+              Start with basic gum. Survive longer to earn cash and unlock upgrades.
+            </p>
+            <ul id="modeDetails">
+              <li>Progress, inventory, and records save automatically.</li>
+            </ul>
+          </div>
+          <div class="mode-economy" id="modeEconomy">
+            <span id="modeEconomyLabel">Progress wallet</span>
+            <strong id="modeEconomyValue">$0</strong>
+            <p id="modeEconomyText">Spend what you earn.</p>
+            <button class="primary" id="modeShopButton" type="button">Open progression shop</button>
+          </div>
+        </section>
+
+        <section class="lab-view mode-view hidden" id="labView" aria-label="Infinite bubble mode">
+          <div class="lab-stage" id="labStage">
+            <div class="lab-flash" id="labFlash">Sugar rush</div>
+            <div class="pop-particles" id="popParticles" aria-hidden="true"></div>
+            <button class="lab-bubble" id="labBubble" type="button" aria-label="Hold to inflate and release to pop">
+              <span id="labBubbleText">Hold me</span>
+            </button>
+            <div class="lab-gum-label" id="labGumLabel">Starter Slab</div>
           </div>
 
-          <div class="track-wrap">
-            <div class="track-meta">
+          <div class="lab-console">
+            <div class="lab-readout">
               <div>
-                <span>Survival</span>
-                <strong id="timer">0.0s</strong>
+                <span>Pop combo</span>
+                <strong id="labCombo">0</strong>
               </div>
               <div>
-                <span>Round cash</span>
-                <strong id="roundCash">$0</strong>
+                <span>Bubble size</span>
+                <strong id="labSize">140px</strong>
               </div>
               <div>
-                <span>Equipped</span>
-                <strong id="equippedName">Starter Slab</strong>
-              </div>
-              <div>
-                <span>Multiplier</span>
-                <strong id="multiplier">1x</strong>
+                <span>Wallet</span>
+                <strong id="labReward">∞</strong>
               </div>
             </div>
-
-            <div class="track" id="track" aria-label="Control track">
-              <div class="wall left" id="leftWall"></div>
-              <div class="safe-lane" id="safeLane"></div>
-              <div class="wall right" id="rightWall"></div>
-              <div class="control-chip" id="controlChip"></div>
+            <div class="lab-actions">
+              <button class="primary" id="inflateButton" type="button">Hold to inflate</button>
+              <button class="pop-button" id="popButton" type="button">Pop now</button>
             </div>
           </div>
 
-          <div class="controls">
-            <button class="primary" id="playButton" type="button">Start attempt</button>
-            <div class="nudge-controls" aria-label="Touch controls">
-              <button id="leftButton" type="button">Left</button>
-              <button id="rightButton" type="button">Right</button>
-            </div>
+          <div class="lab-message" id="labMessage" role="status" aria-live="polite">
+            Infinite wallet active. Choose any gum, inflate it, stretch it, and pop without limits.
           </div>
+        </section>
 
-          <div class="streak-status">
-            <div>
-              <span>Long runs build streaks. Better streaks earn bigger cash boosts.</span>
-              <strong id="streakText">0 / 3</strong>
+        <section class="mode-view" id="challengeView" aria-label="Bubble challenge mode">
+          <section class="game-card" aria-label="Bubble game">
+            <div class="bubble-zone" id="bubbleZone">
+              <div class="record-burst" id="recordBurst">New record</div>
+              <div class="bubble" id="bubble">
+                <span id="bubbleText">Ready</span>
+              </div>
+              <div class="gum-label" id="gumLabel">Starter Slab</div>
             </div>
-            <div class="streak-pips" aria-hidden="true">
-              <span class="streak-pip"></span>
-              <span class="streak-pip"></span>
-              <span class="streak-pip"></span>
+
+            <div class="track-wrap">
+              <div class="track-meta">
+                <div>
+                  <span>Survival</span>
+                  <strong id="timer">0.0s</strong>
+                </div>
+                <div>
+                  <span id="roundCashLabel">Round cash</span>
+                  <strong id="roundCash">$0</strong>
+                </div>
+                <div>
+                  <span>Equipped</span>
+                  <strong id="equippedName">Starter Slab</strong>
+                </div>
+                <div>
+                  <span>Multiplier</span>
+                  <strong id="multiplier">1x</strong>
+                </div>
+                <div title="Each steering click adds to this attempt's payout, up to double cash.">
+                  <span>Click bonus</span>
+                  <strong id="clickCount">0 · +0%</strong>
+                </div>
+              </div>
+
+              <div class="track" id="track" aria-label="Control track">
+                <div class="wall left" id="leftWall"></div>
+                <div class="safe-lane" id="safeLane"></div>
+                <div class="wall right" id="rightWall"></div>
+                <div class="control-chip" id="controlChip"></div>
+              </div>
             </div>
-          </div>
+
+            <div class="controls">
+              <button class="primary" id="playButton" type="button">Start attempt</button>
+              <div class="nudge-controls" aria-label="Touch controls">
+                <button id="leftButton" type="button">Left</button>
+                <button id="rightButton" type="button">Right</button>
+              </div>
+            </div>
+
+            <div class="streak-status" id="streakStatus">
+              <div>
+                <span>Three strong runs unlock a cash boost.</span>
+                <strong id="streakText">0 / 3</strong>
+              </div>
+              <div class="streak-pips" aria-hidden="true">
+                <span class="streak-pip"></span>
+                <span class="streak-pip"></span>
+                <span class="streak-pip"></span>
+              </div>
+            </div>
+          </section>
         </section>
       </section>
 
@@ -124,15 +190,42 @@
           </dl>
         </section>
 
-        <section class="panel">
+        <section class="panel shop-panel" id="shopPanel">
           <div class="panel-title">
-            <h2>Inventory</h2>
-            <span id="inventoryCount">1 owned</span>
+            <h2 id="shopTitle">Gum Shop</h2>
+            <span id="shopBalance">Wallet $0</span>
           </div>
-          <div class="inventory" id="inventory"></div>
+          <input class="shop-search" id="shopSearch" type="search" placeholder="Find a flavor" aria-label="Search gum shop">
+          <div class="shop-list sidebar-shop" id="shopList"></div>
         </section>
       </aside>
     </main>
+
+    <div class="modal welcome-modal hidden" id="welcomeModal" role="dialog" aria-modal="true" aria-labelledby="welcomeTitle">
+      <div class="modal-card welcome-card">
+        <div class="welcome-intro">
+          <div class="welcome-brand"><span></span> Bubble Gum Indulgence</div>
+          <h2 id="welcomeTitle">Choose your mode</h2>
+          <p class="welcome-controls">Steer with <kbd>←</kbd> <kbd>→</kbd> or <kbd>A</kbd> <kbd>D</kbd>. Dodge the walls. Clicks boost cash.</p>
+        </div>
+
+        <div class="welcome-modes">
+          <article class="welcome-choice challenge-choice">
+            <p class="mode-tag">Challenge</p>
+            <h3>Conquer the Bubble</h3>
+            <p class="mode-summary">Earn. Upgrade. Beat your best.</p>
+            <button class="primary" id="welcomeChallengeButton" type="button">Play Challenge</button>
+          </article>
+
+          <article class="welcome-choice infinite-choice">
+            <p class="mode-tag">Infinite</p>
+            <h3>Own the Gum World</h3>
+            <p class="mode-summary">Every gum. Unlimited cash.</p>
+            <button class="primary" id="welcomeInfiniteButton" type="button">Play Infinite</button>
+          </article>
+        </div>
+      </div>
+    </div>
 
     <div class="modal hidden" id="summaryModal" role="dialog" aria-modal="true" aria-labelledby="summaryTitle">
       <div class="modal-card summary-card">
@@ -148,7 +241,7 @@
             <strong id="summaryCash">$0</strong>
           </div>
           <div>
-            <span>Total</span>
+            <span id="summaryTotalLabel">Total</span>
             <strong id="summaryTotal">$0</strong>
           </div>
         </div>
@@ -156,19 +249,19 @@
       </div>
     </div>
 
-    <div class="modal hidden" id="shopModal" role="dialog" aria-modal="true" aria-labelledby="shopTitle">
-      <div class="modal-card shop-card">
+    <div class="modal hidden" id="inventoryModal" role="dialog" aria-modal="true" aria-labelledby="inventoryTitle">
+      <div class="modal-card inventory-card">
         <div class="shop-head">
           <div>
-            <p class="eyebrow">Gum shop</p>
-            <h2 id="shopTitle">Upgrade the chew</h2>
+            <p class="eyebrow">Your collection</p>
+            <h2 id="inventoryTitle">Inventory</h2>
+            <span id="inventoryCount">1 owned</span>
           </div>
-          <button class="icon-button" id="closeShopButton" type="button" aria-label="Close gum shop" title="Close">
+          <button class="icon-button" id="closeInventoryButton" type="button" aria-label="Close inventory" title="Close">
             Close
           </button>
         </div>
-        <input class="shop-search" id="shopSearch" type="search" placeholder="Search 55 flavors" aria-label="Search gum flavors">
-        <div class="shop-list" id="shopList"></div>
+        <div class="inventory" id="inventory"></div>
       </div>
     </div>
 

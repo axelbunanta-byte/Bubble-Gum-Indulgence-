@@ -1,6 +1,11 @@
 const STORAGE_KEY = "bubble-gum-indulgence-v2";
 const AUDIO_STORAGE_KEY = "bubble-gum-indulgence-audio-v1";
+const MODE_STORAGE_KEY = "bubble-gum-indulgence-mode-v1";
+const INFINITE_STORAGE_KEY = "bubble-gum-indulgence-infinite-v1";
+const WELCOME_STORAGE_KEY = "bubble-gum-indulgence-welcome-v2";
 const STREAK_RUNS_REQUIRED = 3;
+const CLICK_BONUS_PER_ACTION = 1;
+const MAX_CLICK_BONUS = 100;
 const MULTIPLIER_TIERS = [
   { seconds: 22, multiplier: 10, name: "Ultra" },
   { seconds: 16, multiplier: 5, name: "Super" },
@@ -249,6 +254,12 @@ const defaultState = {
   nextRoundMultiplier: 1,
 };
 
+const defaultInfiniteState = {
+  unlocked: ["starter"],
+  activeGumId: "starter",
+  pops: 0,
+};
+
 const defaultAudioSettings = {
   musicVolume: 0.35,
   gameVolume: 0.7,
@@ -258,6 +269,7 @@ const MUSIC_NOTES = [659.25, 783.99, 880, 783.99, 698.46, 880, 987.77, 880, 587.
 const MUSIC_BASS = [164.81, 174.61, 146.83, 130.81];
 
 let state = loadState();
+let infiniteState = loadInfiniteState();
 let audioSettings = loadAudioSettings();
 let inputDirection = 1;
 let audioContext = null;
@@ -266,23 +278,64 @@ let gameGain = null;
 let musicTimer = null;
 let musicStep = 0;
 let selectedDetailGumId = null;
+let currentMode = loadMode();
 let game = createIdleGame();
+let lab = createLabState();
+let countdownActive = false;
+let countdownValue = 0;
+let countdownTimer = null;
+let welcomeOpen = !hasSeenWelcome();
 
 const els = {
   arcade: document.querySelector("#arcade"),
+  gameTitle: document.querySelector("#gameTitle"),
+  labModeButton: document.querySelector("#labModeButton"),
+  challengeModeButton: document.querySelector("#challengeModeButton"),
+  labView: document.querySelector("#labView"),
+  challengeView: document.querySelector("#challengeView"),
+  modeExplainer: document.querySelector("#modeExplainer"),
+  modeKicker: document.querySelector("#modeKicker"),
+  modeName: document.querySelector("#modeName"),
+  modeDescription: document.querySelector("#modeDescription"),
+  modeDetails: document.querySelector("#modeDetails"),
+  modeEconomy: document.querySelector("#modeEconomy"),
+  modeEconomyLabel: document.querySelector("#modeEconomyLabel"),
+  modeEconomyValue: document.querySelector("#modeEconomyValue"),
+  modeEconomyText: document.querySelector("#modeEconomyText"),
+  modeShopButton: document.querySelector("#modeShopButton"),
+  welcomeModal: document.querySelector("#welcomeModal"),
+  welcomeChallengeButton: document.querySelector("#welcomeChallengeButton"),
+  welcomeInfiniteButton: document.querySelector("#welcomeInfiniteButton"),
+  labStage: document.querySelector("#labStage"),
+  labBubble: document.querySelector("#labBubble"),
+  labBubbleText: document.querySelector("#labBubbleText"),
+  labGumLabel: document.querySelector("#labGumLabel"),
+  labCombo: document.querySelector("#labCombo"),
+  labSize: document.querySelector("#labSize"),
+  labReward: document.querySelector("#labReward"),
+  inflateButton: document.querySelector("#inflateButton"),
+  popButton: document.querySelector("#popButton"),
+  labMessage: document.querySelector("#labMessage"),
+  labFlash: document.querySelector("#labFlash"),
+  popParticles: document.querySelector("#popParticles"),
   cash: document.querySelector("#cash"),
+  cashPill: document.querySelector("#cashPill"),
   bestTime: document.querySelector("#bestTime"),
-  shopButton: document.querySelector("#shopButton"),
+  secondaryStatLabel: document.querySelector("#secondaryStatLabel"),
+  inventoryButton: document.querySelector("#inventoryButton"),
   settingsButton: document.querySelector("#settingsButton"),
   bubbleZone: document.querySelector("#bubbleZone"),
   bubble: document.querySelector("#bubble"),
   bubbleText: document.querySelector("#bubbleText"),
   gumLabel: document.querySelector("#gumLabel"),
   timer: document.querySelector("#timer"),
+  roundCashLabel: document.querySelector("#roundCashLabel"),
   roundCash: document.querySelector("#roundCash"),
   equippedName: document.querySelector("#equippedName"),
   multiplier: document.querySelector("#multiplier"),
+  clickCount: document.querySelector("#clickCount"),
   streakText: document.querySelector("#streakText"),
+  streakStatus: document.querySelector("#streakStatus"),
   streakPips: [...document.querySelectorAll(".streak-pip")],
   track: document.querySelector("#track"),
   controlChip: document.querySelector("#controlChip"),
@@ -304,10 +357,14 @@ const els = {
   summaryTime: document.querySelector("#summaryTime"),
   summaryCash: document.querySelector("#summaryCash"),
   summaryCashLabel: document.querySelector("#summaryCashLabel"),
+  summaryTotalLabel: document.querySelector("#summaryTotalLabel"),
   summaryTotal: document.querySelector("#summaryTotal"),
   playAgainButton: document.querySelector("#playAgainButton"),
-  shopModal: document.querySelector("#shopModal"),
-  closeShopButton: document.querySelector("#closeShopButton"),
+  inventoryModal: document.querySelector("#inventoryModal"),
+  closeInventoryButton: document.querySelector("#closeInventoryButton"),
+  shopTitle: document.querySelector("#shopTitle"),
+  shopPanel: document.querySelector("#shopPanel"),
+  shopBalance: document.querySelector("#shopBalance"),
   shopList: document.querySelector("#shopList"),
   shopSearch: document.querySelector("#shopSearch"),
   gumDetailModal: document.querySelector("#gumDetailModal"),
@@ -351,6 +408,23 @@ function createIdleGame() {
     bubbleSize: 140,
     speedScale: 1,
     rewardMultiplier: 1,
+    clicks: 0,
+    clickBonusPercent: 0,
+  };
+}
+
+function createLabState() {
+  return {
+    active: false,
+    popping: false,
+    animationFrame: null,
+    lastFrameAt: 0,
+    size: 140,
+    combo: 0,
+    lastPopAt: 0,
+    lastReward: 0,
+    pointerStartX: 0,
+    pointerStartY: 0,
   };
 }
 
@@ -391,6 +465,30 @@ function createDefaultState() {
   };
 }
 
+function createDefaultInfiniteState() {
+  return {
+    ...defaultInfiniteState,
+    unlocked: [...defaultInfiniteState.unlocked],
+  };
+}
+
+function loadInfiniteState() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(INFINITE_STORAGE_KEY));
+    if (!saved || !Array.isArray(saved.unlocked)) return createDefaultInfiniteState();
+    const unlocked = [...new Set(["starter", ...saved.unlocked])].filter((id) =>
+      gums.some((gum) => gum.id === id)
+    );
+    return {
+      unlocked,
+      activeGumId: unlocked.includes(saved.activeGumId) ? saved.activeGumId : "starter",
+      pops: Number.isInteger(saved.pops) ? Math.max(0, saved.pops) : 0,
+    };
+  } catch {
+    return createDefaultInfiniteState();
+  }
+}
+
 function loadAudioSettings() {
   try {
     const saved = JSON.parse(localStorage.getItem(AUDIO_STORAGE_KEY));
@@ -415,8 +513,46 @@ function saveAudioSettings() {
   localStorage.setItem(AUDIO_STORAGE_KEY, JSON.stringify(audioSettings));
 }
 
+function saveInfiniteState() {
+  localStorage.setItem(INFINITE_STORAGE_KEY, JSON.stringify(infiniteState));
+}
+
+function loadMode() {
+  return localStorage.getItem(MODE_STORAGE_KEY) === "infinite" ? "infinite" : "challenge";
+}
+
+function saveMode() {
+  localStorage.setItem(MODE_STORAGE_KEY, currentMode);
+}
+
+function hasSeenWelcome() {
+  try {
+    return localStorage.getItem(WELCOME_STORAGE_KEY) === "seen";
+  } catch {
+    return false;
+  }
+}
+
+function finishWelcome(mode) {
+  currentMode = mode;
+  saveMode();
+  try {
+    localStorage.setItem(WELCOME_STORAGE_KEY, "seen");
+  } catch {}
+  welcomeOpen = false;
+  els.welcomeModal.classList.add("hidden");
+  render();
+  renderInventory();
+  renderShop();
+}
+
 function activeGum() {
-  return gums.find((gum) => gum.id === state.activeGumId) || gums[0];
+  const activeId = currentMode === "infinite" ? infiniteState.activeGumId : state.activeGumId;
+  return gums.find((gum) => gum.id === activeId) || gums[0];
+}
+
+function activeCollection() {
+  return currentMode === "infinite" ? infiniteState : state;
 }
 
 function formatMoney(value) {
@@ -461,17 +597,35 @@ function readableTextColor(hexColor) {
   return brightness > 150 ? "#211820" : "#ffffff";
 }
 
+function visualBubbleSize(rawSize, gum) {
+  const minimumSize = 140;
+  const viewportLimit = Math.min(420, window.innerWidth * 0.62, window.innerHeight * 0.42);
+  const maximumSize = Math.max(190, viewportLimit);
+  const growthRange = Math.max(1, gum.maxBubble - minimumSize);
+  const growthProgress = Math.max(0, Math.min(1, (rawSize - minimumSize) / growthRange));
+  return minimumSize + (maximumSize - minimumSize) * growthProgress;
+}
+
 function render() {
   const gum = activeGum();
-  const bubbleSize = game.active ? game.bubbleSize : Math.max(140, Math.min(state.bestBubble || 150, gum.maxBubble));
+  const infiniteMode = currentMode === "infinite";
+  const rawBubbleSize = game.active
+    ? game.bubbleSize
+    : infiniteMode
+      ? 150
+      : Math.max(140, Math.min(state.bestBubble || 150, gum.maxBubble));
+  const bubbleSize = visualBubbleSize(rawBubbleSize, gum);
 
-  els.cash.textContent = formatMoney(state.cash);
-  els.bestTime.textContent = formatTime(state.bestTime);
+  els.cash.textContent = infiniteMode ? "∞" : formatMoney(state.cash);
+  els.secondaryStatLabel.textContent = infiniteMode ? "Freedom" : "Best";
+  els.bestTime.textContent = infiniteMode ? "Unlimited" : formatTime(state.bestTime);
   els.timer.textContent = formatTime(game.elapsed);
+  els.roundCashLabel.textContent = infiniteMode ? "Simulated cash" : "Round cash";
   els.roundCash.textContent = formatMoney(game.cashEarned);
   els.equippedName.textContent = gum.name;
-  const visibleMultiplier = game.active ? game.rewardMultiplier : state.nextRoundMultiplier;
+  const visibleMultiplier = infiniteMode ? 1 : game.active ? game.rewardMultiplier : state.nextRoundMultiplier;
   els.multiplier.textContent = `${visibleMultiplier}x`;
+  els.clickCount.textContent = `${game.clicks} · +${game.clickBonusPercent}%`;
   els.multiplier.classList.toggle("bonus", visibleMultiplier > 1);
   els.multiplier.classList.toggle("ultra", visibleMultiplier === 10);
   els.streakText.textContent = state.nextRoundMultiplier > 1
@@ -484,7 +638,7 @@ function render() {
   els.streakPips.forEach((pip, index) => {
     pip.classList.toggle("active", state.nextRoundMultiplier > 1 || index < state.streakTimes.length);
   });
-  els.bubbleText.textContent = game.active ? formatTime(game.elapsed) : "Ready";
+  els.bubbleText.textContent = countdownActive ? countdownValue : game.active ? formatTime(game.elapsed) : "Ready";
   els.gumLabel.textContent = gum.name;
   els.arcade.style.setProperty("--gum-color", gum.color);
   els.arcade.style.setProperty("--gum-ink", readableTextColor(gum.color));
@@ -494,11 +648,97 @@ function render() {
   els.track.style.setProperty("--chip-x", `${game.chip}%`);
   els.leftButton.classList.toggle("active", inputDirection < 0);
   els.rightButton.classList.toggle("active", inputDirection > 0);
-  els.playButton.textContent = game.active ? "Inflating..." : "Start attempt";
-  els.playButton.disabled = game.active;
-  els.settingsButton.disabled = game.active;
+  els.playButton.textContent = countdownActive
+    ? `Starting in ${countdownValue}`
+    : game.active
+      ? "Inflating..."
+      : infiniteMode
+        ? "Start infinite run"
+        : "Start challenge";
+  els.playButton.disabled = game.active || countdownActive;
+  els.settingsButton.disabled = game.active || countdownActive;
+  els.inventoryButton.disabled = game.active || countdownActive;
+  els.modeShopButton.disabled = game.active || countdownActive;
+  els.labModeButton.disabled = game.active || countdownActive;
+  els.challengeModeButton.disabled = game.active || countdownActive;
+  els.labModeButton.classList.toggle("active", infiniteMode);
+  els.challengeModeButton.classList.toggle("active", currentMode === "challenge");
+  els.labModeButton.setAttribute("aria-pressed", infiniteMode);
+  els.challengeModeButton.setAttribute("aria-pressed", currentMode === "challenge");
+  els.labView.classList.add("hidden");
+  els.challengeView.classList.remove("hidden");
+  els.streakStatus.classList.toggle("hidden", infiniteMode);
+  els.arcade.classList.toggle("infinite-mode", infiniteMode);
+  els.cashPill.classList.toggle("infinite-power", infiniteMode);
+  els.inventoryButton.textContent = "Inventory";
+  els.gameTitle.textContent = infiniteMode ? "Infinite Bubble Mode" : "Bubble Gum Challenge";
+  els.shopTitle.textContent = infiniteMode ? "Unlimited Gum Shop" : "Gum Shop";
+  els.shopBalance.textContent = infiniteMode ? "Wallet ∞" : `Wallet ${formatMoney(state.cash)}`;
+  renderModeExplanation(infiniteMode);
 
   renderEquipped(gum);
+  renderLab();
+}
+
+function renderModeExplanation(infiniteMode) {
+  els.modeExplainer.classList.toggle("infinite", infiniteMode);
+  els.modeEconomy.classList.toggle("infinite", infiniteMode);
+
+  if (infiniteMode) {
+    els.modeKicker.textContent = "No limits.";
+    els.modeName.textContent = "Infinite Mode";
+    els.modeDescription.textContent = "Every gum. Unlimited cash. Real payouts.";
+    els.modeDetails.innerHTML = `
+      <li>Infinite purchases stay separate from Challenge progress.</li>
+    `;
+    els.modeEconomyLabel.textContent = "Infinite wallet";
+    els.modeEconomyValue.textContent = "∞";
+    els.modeEconomyText.textContent = "Your balance never drops.";
+    els.modeShopButton.textContent = "Unlimited shop";
+  } else {
+    els.modeKicker.textContent = "Earn your way up.";
+    els.modeName.textContent = "Challenge Mode";
+    els.modeDescription.textContent = "Earn cash. Unlock gum. Beat your best.";
+    els.modeDetails.innerHTML = `
+      <li>Progress, inventory, and records save automatically.</li>
+    `;
+    els.modeEconomyLabel.textContent = "Progress wallet";
+    els.modeEconomyValue.textContent = formatMoney(state.cash);
+    els.modeEconomyText.textContent = "Spend what you earn.";
+    els.modeShopButton.textContent = "Shop";
+  }
+}
+
+function renderLab() {
+  const gum = activeGum();
+  els.labStage.style.setProperty("--lab-color", gum.color);
+  els.labStage.style.setProperty("--lab-ink", readableTextColor(gum.color));
+  els.labBubble.style.setProperty("--lab-size", `${lab.size}px`);
+  els.labBubbleText.textContent = lab.active ? `${Math.round(lab.size)}px` : lab.popping ? "Pop!" : "Hold me";
+  els.labGumLabel.textContent = gum.name;
+  els.labCombo.textContent = lab.combo;
+  els.labSize.textContent = `${Math.round(lab.size)}px`;
+  els.labReward.textContent = "∞";
+  els.inflateButton.textContent = lab.active ? "Growing..." : "Hold to inflate";
+  els.inflateButton.disabled = lab.popping;
+  els.popButton.disabled = lab.popping;
+  els.labBubble.disabled = lab.popping;
+}
+
+function setMode(mode) {
+  if (!["infinite", "challenge"].includes(mode) || game.active || countdownActive || welcomeOpen) return;
+  if (mode !== "infinite" && lab.active) {
+    cancelAnimationFrame(lab.animationFrame);
+    lab.active = false;
+    lab.size = 140;
+    els.labBubble.style.setProperty("--lab-stretch-x", "1");
+    els.labBubble.style.setProperty("--lab-stretch-y", "1");
+  }
+  currentMode = mode;
+  saveMode();
+  render();
+  renderInventory();
+  renderShop();
 }
 
 function renderEquipped(gum) {
@@ -514,21 +754,22 @@ function renderEquipped(gum) {
 }
 
 function renderInventory() {
-  els.inventoryCount.textContent = `${state.unlocked.length} owned`;
+  const collection = activeCollection();
+  els.inventoryCount.textContent = `${collection.unlocked.length} owned`;
   els.inventory.innerHTML = "";
 
-  state.unlocked.forEach((id) => {
+  collection.unlocked.forEach((id) => {
     const gum = gums.find((item) => item.id === id);
     if (!gum) return;
 
     const item = document.createElement("button");
     item.type = "button";
-    item.className = `inventory-item${gum.id === state.activeGumId ? " equipped" : ""}`;
+    item.className = `inventory-item${gum.id === collection.activeGumId ? " equipped" : ""}`;
     item.innerHTML = `
       <span class="pack-art" style="background:${gum.color}">${gum.shortName}</span>
       <span>
         <strong>${gum.name}</strong>
-        <p>${gum.id === state.activeGumId ? "Equipped" : "Tap to equip"}</p>
+        <p>${gum.id === collection.activeGumId ? "Equipped" : "Tap to equip"}</p>
       </span>
     `;
     item.addEventListener("click", () => equipGum(gum.id));
@@ -539,19 +780,21 @@ function renderInventory() {
 function renderShop() {
   els.shopList.innerHTML = "";
   const searchTerm = els.shopSearch.value.trim().toLowerCase();
+  const collection = activeCollection();
+  const infiniteMode = currentMode === "infinite";
 
   gums
     .filter((gum) => `${gum.name} ${gum.flavor} ${gum.perk}`.toLowerCase().includes(searchTerm))
     .forEach((gum) => {
-    const owned = state.unlocked.includes(gum.id);
-    const canBuy = state.cash >= gum.price;
+    const owned = collection.unlocked.includes(gum.id);
+    const canBuy = infiniteMode || state.cash >= gum.price;
     const card = document.createElement("article");
     card.className = "shop-item";
     card.innerHTML = `
       <div class="pack-art" style="background:${gum.color}">${gum.shortName}</div>
       <div>
         <h3>${gum.name}</h3>
-        <p>${gum.flavor}</p>
+        <p class="flavor-copy">${gum.flavor}</p>
         <p class="perk-copy">${gum.perk}</p>
         <div class="shop-stats">
           <span>${formatMoney(gum.price)}</span>
@@ -562,12 +805,15 @@ function renderShop() {
         <div class="shop-actions">
           <button class="detail-action" type="button">Details</button>
           <button class="gum-action${owned ? " secondary" : ""}" type="button" ${!owned && !canBuy ? "disabled" : ""}>
-            ${owned ? (gum.id === state.activeGumId ? "Equipped" : "Equip") : "Buy"}
+            ${owned ? (gum.id === collection.activeGumId ? "Equipped" : "Equip") : "Buy"}
           </button>
         </div>
       </div>
     `;
 
+    card.addEventListener("click", (event) => {
+      if (!event.target.closest("button")) openGumDetail(gum.id);
+    });
     card.querySelector(".detail-action").addEventListener("click", () => openGumDetail(gum.id));
     card.querySelector(".gum-action").addEventListener("click", () => {
       if (owned) {
@@ -686,8 +932,10 @@ function renderGumDetail() {
   const gum = gums.find((item) => item.id === selectedDetailGumId);
   if (!gum) return;
 
-  const owned = state.unlocked.includes(gum.id);
-  const canBuy = state.cash >= gum.price;
+  const collection = activeCollection();
+  const infiniteMode = currentMode === "infinite";
+  const owned = collection.unlocked.includes(gum.id);
+  const canBuy = infiniteMode || state.cash >= gum.price;
   const positioning = gumPositioning(gum);
   const comparisons = gumComparisons(gum);
 
@@ -709,9 +957,11 @@ function renderGumDetail() {
   `;
   els.detailComparisons.innerHTML = comparisons.map((comparison) => `<li>${comparison}</li>`).join("");
   els.detailAction.textContent = owned
-    ? gum.id === state.activeGumId ? "Equipped" : "Equip this gum"
-    : canBuy ? `Buy for ${formatMoney(gum.price)}` : `Need ${formatMoney(gum.price - state.cash)} more`;
-  els.detailAction.disabled = (owned && gum.id === state.activeGumId) || (!owned && !canBuy);
+    ? gum.id === collection.activeGumId ? "Equipped" : "Equip this gum"
+    : canBuy
+      ? infiniteMode ? `Buy for ${formatMoney(gum.price)} - wallet stays ∞` : `Buy for ${formatMoney(gum.price)}`
+      : `Need ${formatMoney(gum.price - state.cash)} more`;
+  els.detailAction.disabled = (owned && gum.id === collection.activeGumId) || (!owned && !canBuy);
   els.detailAction.classList.toggle("secondary", owned);
 }
 
@@ -728,7 +978,7 @@ function closeGumDetail() {
 function handleDetailAction() {
   const gum = gums.find((item) => item.id === selectedDetailGumId);
   if (!gum) return;
-  if (state.unlocked.includes(gum.id)) {
+  if (activeCollection().unlocked.includes(gum.id)) {
     equipGum(gum.id);
   } else {
     buyGum(gum.id);
@@ -737,9 +987,11 @@ function handleDetailAction() {
 }
 
 function equipGum(id) {
-  if (!state.unlocked.includes(id)) return;
-  state.activeGumId = id;
-  saveState();
+  const collection = activeCollection();
+  if (!collection.unlocked.includes(id)) return;
+  collection.activeGumId = id;
+  if (currentMode === "infinite") saveInfiniteState();
+  else saveState();
   render();
   renderInventory();
   renderShop();
@@ -747,22 +999,173 @@ function equipGum(id) {
 
 function buyGum(id) {
   const gum = gums.find((item) => item.id === id);
-  if (!gum || state.unlocked.includes(id) || state.cash < gum.price) return;
+  const collection = activeCollection();
+  const infiniteMode = currentMode === "infinite";
+  if (!gum || collection.unlocked.includes(id) || (!infiniteMode && state.cash < gum.price)) return;
 
-  state.cash -= gum.price;
-  state.unlocked.push(id);
-  state.activeGumId = id;
-  saveState();
+  if (infiniteMode) {
+    infiniteState.unlocked.push(id);
+    infiniteState.activeGumId = id;
+    saveInfiniteState();
+  } else {
+    state.cash -= gum.price;
+    state.unlocked.push(id);
+    state.activeGumId = id;
+    saveState();
+  }
   playTone(680, 0.09, "triangle", 0.05);
   render();
   renderInventory();
   renderShop();
 }
 
-function startAttempt() {
-  const now = performance.now();
-  const rewardMultiplier = state.nextRoundMultiplier;
+function beginLabInflation(event) {
+  if (currentMode !== "infinite" || lab.active || lab.popping) return;
+  event?.preventDefault();
+  if (event?.pointerId !== undefined && event.currentTarget?.setPointerCapture) {
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
   startMusic();
+  lab.active = true;
+  lab.lastFrameAt = performance.now();
+  lab.pointerStartX = event?.clientX || 0;
+  lab.pointerStartY = event?.clientY || 0;
+  els.labMessage.textContent = "Keep holding for a bigger bubble. Release to pop.";
+  playTone(520, 0.06, "sine", 0.025);
+  renderLab();
+  lab.animationFrame = requestAnimationFrame(tickLab);
+}
+
+function tickLab(now) {
+  if (!lab.active) return;
+  const gum = activeGum();
+  const delta = Math.min((now - lab.lastFrameAt) / 1000, 0.05);
+  lab.lastFrameAt = now;
+  const growthPerSecond = 48 * gum.bubbleGrowth * (0.92 + gum.yieldMultiplier * 0.025);
+  lab.size = Math.min(gum.maxBubble, lab.size + delta * growthPerSecond);
+
+  const wobble = Math.sin(now / 115) * Math.min(4, 1 + (lab.size - 140) / 90);
+  els.labBubble.style.setProperty("--lab-wobble", `${wobble}deg`);
+  renderLab();
+  lab.animationFrame = requestAnimationFrame(tickLab);
+}
+
+function stretchLabBubble(event) {
+  if (!lab.active || !event.clientX) return;
+  const horizontal = Math.max(-70, Math.min(70, event.clientX - lab.pointerStartX));
+  const vertical = Math.max(-45, Math.min(45, event.clientY - lab.pointerStartY));
+  const stretchX = 1 + Math.abs(horizontal) / 220;
+  const stretchY = Math.max(0.78, 1 - Math.abs(horizontal) / 320 + Math.abs(vertical) / 700);
+  els.labBubble.style.setProperty("--lab-stretch-x", stretchX.toFixed(3));
+  els.labBubble.style.setProperty("--lab-stretch-y", stretchY.toFixed(3));
+}
+
+function releaseLabBubble() {
+  if (!lab.active) return;
+  popLabBubble();
+}
+
+function createPopParticles(color, amount) {
+  els.popParticles.innerHTML = "";
+  for (let index = 0; index < amount; index += 1) {
+    const particle = document.createElement("span");
+    const angle = (Math.PI * 2 * index) / amount + Math.random() * 0.25;
+    const distance = 80 + Math.random() * 130;
+    particle.style.setProperty("--particle-x", `${Math.cos(angle) * distance}px`);
+    particle.style.setProperty("--particle-y", `${Math.sin(angle) * distance}px`);
+    particle.style.setProperty("--particle-color", color);
+    particle.style.setProperty("--particle-delay", `${Math.random() * 70}ms`);
+    els.popParticles.append(particle);
+  }
+}
+
+function popLabBubble() {
+  if (currentMode !== "infinite" || lab.popping) return;
+  const gum = activeGum();
+  if (lab.animationFrame) cancelAnimationFrame(lab.animationFrame);
+  lab.active = false;
+  lab.popping = true;
+
+  const now = performance.now();
+  lab.combo = now - lab.lastPopAt < 4200 ? lab.combo + 1 : 1;
+  lab.lastPopAt = now;
+  const comboPopAt = lab.lastPopAt;
+  infiniteState.pops += 1;
+
+  const sizeProgress = Math.max(0, Math.min(1, (lab.size - 140) / Math.max(1, gum.maxBubble - 140)));
+  const perfectPop = sizeProgress >= 0.62 && sizeProgress <= 0.84;
+  const sugarRush = infiniteState.pops % 8 === 0;
+  saveInfiniteState();
+
+  els.labBubble.style.setProperty("--lab-stretch-x", "1");
+  els.labBubble.style.setProperty("--lab-stretch-y", "1");
+  els.labBubble.classList.add("lab-pop");
+  createPopParticles(gum.color, sugarRush ? 26 : perfectPop ? 20 : 14);
+  playPop();
+  navigator.vibrate?.(sugarRush ? [35, 25, 45] : 28);
+
+  if (sugarRush) {
+    els.labMessage.textContent = "Sugar rush! Maximum sparkle, unlimited wallet, and a fresh bubble incoming.";
+    els.labFlash.classList.remove("show");
+    requestAnimationFrame(() => els.labFlash.classList.add("show"));
+    playTone(1046.5, 0.16, "triangle", 0.05);
+  } else if (perfectPop) {
+    els.labMessage.textContent = `Perfect pop! Your ${lab.combo}-pop combo keeps climbing.`;
+    playTone(880, 0.12, "triangle", 0.045);
+  } else if (sizeProgress > 0.9) {
+    els.labMessage.textContent = "Mega pop! That bubble nearly reached this gum's full capacity.";
+  } else {
+    els.labMessage.textContent = `${lab.combo}-pop combo. No cost, no limits, and your next bubble is ready.`;
+  }
+
+  render();
+  setTimeout(() => {
+    lab.size = 140;
+    lab.popping = false;
+    els.labBubble.classList.remove("lab-pop");
+    render();
+  }, 320);
+  setTimeout(() => {
+    if (lab.lastPopAt === comboPopAt && performance.now() - lab.lastPopAt >= 4200) {
+      lab.combo = 0;
+      renderLab();
+    }
+  }, 4250);
+}
+
+function startAttempt() {
+  if (game.active || countdownActive || welcomeOpen) return;
+
+  countdownActive = true;
+  countdownValue = 3;
+  game = createIdleGame();
+  inputDirection = 1;
+  hideSummary();
+  startMusic();
+  playTone(520, 0.08, "sine", 0.04);
+  render();
+
+  const countDown = () => {
+    countdownValue -= 1;
+    if (countdownValue > 0) {
+      playTone(520, 0.08, "sine", 0.04);
+      render();
+      countdownTimer = setTimeout(countDown, 1000);
+      return;
+    }
+
+    countdownActive = false;
+    countdownTimer = null;
+    beginAttempt();
+  };
+
+  countdownTimer = setTimeout(countDown, 1000);
+}
+
+function beginAttempt() {
+  const now = performance.now();
+  const rewardMultiplier = currentMode === "infinite" ? 1 : state.nextRoundMultiplier;
   inputDirection = 1;
   game = {
     ...createIdleGame(),
@@ -773,8 +1176,8 @@ function startAttempt() {
     bubbleSize: 140,
     rewardMultiplier,
   };
-  hideSummary();
-  playTone(420, 0.08, "sine", 0.04);
+  showToast("GO! Keep the slider inside the walls.", "bonus");
+  playTone(760, 0.12, "triangle", 0.05);
   render();
   if (rewardMultiplier > 1) {
     showToast(`${multiplierName(rewardMultiplier)} cash boost is active!`, multiplierTone(rewardMultiplier));
@@ -798,7 +1201,8 @@ function tick(now) {
   game.chip += inputDirection * delta * gum.steerSpeed;
   game.chip = Math.max(0, Math.min(100, game.chip));
 
-  game.cashEarned = game.elapsed * 2.4 * gum.yieldMultiplier * game.rewardMultiplier;
+  const clickBonusMultiplier = 1 + game.clickBonusPercent / 100;
+  game.cashEarned = game.elapsed * 2.4 * gum.yieldMultiplier * game.rewardMultiplier * clickBonusMultiplier;
   const wallPressure = Math.min(1, (game.leftWall + game.rightWall) / 94);
   const growthProgress = Math.min(1, wallPressure * gum.bubbleGrowth);
   game.bubbleSize = 140 + (gum.maxBubble - 140) * growthProgress;
@@ -818,6 +1222,7 @@ function tick(now) {
 function popAttempt() {
   if (!game.active) return;
 
+  const infiniteMode = currentMode === "infinite";
   const finalTime = game.elapsed;
   const finalCash = Math.max(1, Math.floor(game.cashEarned));
   const finalBubble = Math.round(game.bubbleSize);
@@ -827,6 +1232,21 @@ function popAttempt() {
 
   game.active = false;
   cancelAnimationFrame(game.animationFrame);
+
+  els.bubble.classList.add("pop");
+  els.bubbleZone.classList.add("shake");
+  playPop();
+
+  if (infiniteMode) {
+    setTimeout(() => {
+      els.bubble.classList.remove("pop");
+      els.bubbleZone.classList.remove("shake");
+      showSummary(finalTime, finalCash, false, 1, true, game.clickBonusPercent);
+      render();
+    }, 360);
+    return;
+  }
+
   state.cash += finalCash;
   state.bestTime = Math.max(state.bestTime, finalTime);
   state.bestBubble = Math.max(state.bestBubble, finalBubble);
@@ -856,10 +1276,6 @@ function popAttempt() {
   saveState();
   renderShop();
 
-  els.bubble.classList.add("pop");
-  els.bubbleZone.classList.add("shake");
-  playPop();
-
   if (isRecord) {
     els.recordBurst.classList.remove("show");
     requestAnimationFrame(() => els.recordBurst.classList.add("show"));
@@ -869,7 +1285,7 @@ function popAttempt() {
   setTimeout(() => {
     els.bubble.classList.remove("pop");
     els.bubbleZone.classList.remove("shake");
-    showSummary(finalTime, finalCash, isRecord, usedMultiplier);
+    showSummary(finalTime, finalCash, isRecord, usedMultiplier, false, game.clickBonusPercent);
     render();
     if (streakMessage) {
       showToast(streakMessage, multiplierTone(state.nextRoundMultiplier));
@@ -877,12 +1293,18 @@ function popAttempt() {
   }, 360);
 }
 
-function showSummary(time, cash, isRecord, multiplier) {
-  els.summaryTitle.textContent = isRecord ? "New record pop" : "Bubble burst";
+function showSummary(time, cash, isRecord, multiplier, infiniteMode = false, clickBonusPercent = 0) {
+  els.summaryTitle.textContent = infiniteMode ? "Infinite bubble pop" : isRecord ? "New record pop" : "Bubble burst";
   els.summaryTime.textContent = formatTime(time);
-  els.summaryCashLabel.textContent = multiplier > 1 ? `Earned (${multiplierName(multiplier)} boost)` : "Earned";
+  const clickBonusText = clickBonusPercent > 0 ? ` · +${clickBonusPercent}% clicks` : "";
+  els.summaryCashLabel.textContent = infiniteMode
+    ? `Simulated${clickBonusText}`
+    : multiplier > 1
+      ? `${multiplierName(multiplier)} earned${clickBonusText}`
+      : `Earned${clickBonusText}`;
   els.summaryCash.textContent = formatMoney(cash);
-  els.summaryTotal.textContent = formatMoney(state.cash);
+  els.summaryTotalLabel.textContent = infiniteMode ? "Wallet" : "Total";
+  els.summaryTotal.textContent = infiniteMode ? "∞" : formatMoney(state.cash);
   els.summaryModal.classList.remove("hidden");
 }
 
@@ -890,13 +1312,18 @@ function hideSummary() {
   els.summaryModal.classList.add("hidden");
 }
 
-function openShop() {
-  renderShop();
-  els.shopModal.classList.remove("hidden");
+function openInventory() {
+  renderInventory();
+  els.inventoryModal.classList.remove("hidden");
 }
 
-function closeShop() {
-  els.shopModal.classList.add("hidden");
+function closeInventory() {
+  els.inventoryModal.classList.add("hidden");
+}
+
+function focusShop() {
+  els.shopPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+  els.shopSearch.focus({ preventScroll: true });
 }
 
 function openSettings() {
@@ -933,16 +1360,29 @@ function updateAudioSetting(type, value) {
 }
 
 function resetProgress() {
+  clearTimeout(countdownTimer);
+  countdownTimer = null;
+  countdownActive = false;
+  countdownValue = 0;
   if (game.animationFrame) cancelAnimationFrame(game.animationFrame);
+  if (lab.animationFrame) cancelAnimationFrame(lab.animationFrame);
   game = createIdleGame();
+  lab = createLabState();
   inputDirection = 1;
   state = createDefaultState();
+  infiniteState = createDefaultInfiniteState();
   saveState();
+  saveInfiniteState();
 
   els.bubble.classList.remove("pop");
   els.bubbleZone.classList.remove("shake");
+  els.labBubble.classList.remove("lab-pop");
+  els.labBubble.style.setProperty("--lab-stretch-x", "1");
+  els.labBubble.style.setProperty("--lab-stretch-y", "1");
+  els.popParticles.innerHTML = "";
+  els.labMessage.textContent = "Infinite wallet active. Choose any gum, inflate it, stretch it, and pop without limits.";
   hideSummary();
-  closeShop();
+  closeInventory();
   closeGumDetail();
   closeSettings();
   closeResetConfirm();
@@ -954,8 +1394,16 @@ function resetProgress() {
 }
 
 function setDirection(direction) {
+  if (countdownActive || welcomeOpen) return;
+  registerGameClick();
   inputDirection = direction;
   render();
+}
+
+function registerGameClick() {
+  if (!game.active) return;
+  game.clicks += 1;
+  game.clickBonusPercent = Math.min(MAX_CLICK_BONUS, game.clicks * CLICK_BONUS_PER_ACTION);
 }
 
 function setChipFromPointer(event) {
@@ -1086,9 +1534,20 @@ function playPop() {
 
 els.playButton.addEventListener("click", startAttempt);
 els.playAgainButton.addEventListener("click", startAttempt);
-els.shopButton.addEventListener("click", openShop);
+els.welcomeChallengeButton.addEventListener("click", () => finishWelcome("challenge"));
+els.welcomeInfiniteButton.addEventListener("click", () => finishWelcome("infinite"));
+els.labModeButton.addEventListener("click", () => setMode("infinite"));
+els.challengeModeButton.addEventListener("click", () => setMode("challenge"));
+els.labBubble.addEventListener("pointerdown", beginLabInflation);
+els.labBubble.addEventListener("pointermove", stretchLabBubble);
+els.inflateButton.addEventListener("pointerdown", beginLabInflation);
+els.popButton.addEventListener("click", popLabBubble);
+window.addEventListener("pointerup", releaseLabBubble);
+window.addEventListener("pointercancel", releaseLabBubble);
+els.inventoryButton.addEventListener("click", openInventory);
+els.modeShopButton.addEventListener("click", focusShop);
 els.settingsButton.addEventListener("click", openSettings);
-els.closeShopButton.addEventListener("click", closeShop);
+els.closeInventoryButton.addEventListener("click", closeInventory);
 els.closeGumDetailButton.addEventListener("click", closeGumDetail);
 els.detailAction.addEventListener("click", handleDetailAction);
 els.closeSettingsButton.addEventListener("click", closeSettings);
@@ -1108,8 +1567,8 @@ els.confirmResetButton.addEventListener("click", resetProgress);
 els.summaryModal.addEventListener("click", (event) => {
   if (event.target === els.summaryModal) hideSummary();
 });
-els.shopModal.addEventListener("click", (event) => {
-  if (event.target === els.shopModal) closeShop();
+els.inventoryModal.addEventListener("click", (event) => {
+  if (event.target === els.inventoryModal) closeInventory();
 });
 els.gumDetailModal.addEventListener("click", (event) => {
   if (event.target === els.gumDetailModal) closeGumDetail();
@@ -1126,6 +1585,7 @@ els.rightButton.addEventListener("pointerdown", () => setDirection(1));
 
 els.track.addEventListener("pointerdown", (event) => {
   els.track.setPointerCapture(event.pointerId);
+  registerGameClick();
   setChipFromPointer(event);
 });
 els.track.addEventListener("pointermove", setChipFromPointer);
@@ -1133,24 +1593,26 @@ els.track.addEventListener("pointermove", setChipFromPointer);
 window.addEventListener("keydown", (event) => {
   if (event.key === "ArrowLeft" || event.key.toLowerCase() === "a") {
     event.preventDefault();
-    setDirection(-1);
+    if (!event.repeat) setDirection(-1);
   }
 
   if (event.key === "ArrowRight" || event.key.toLowerCase() === "d") {
     event.preventDefault();
-    setDirection(1);
+    if (!event.repeat) setDirection(1);
   }
 
   if (event.key === " " && !event.repeat) {
     event.preventDefault();
-    if (!game.active) startAttempt();
+    if (!game.active && !countdownActive && !welcomeOpen) {
+      startAttempt();
+    }
   }
 
   if (event.key === "Escape") {
     closeResetConfirm();
     closeSettings();
     closeGumDetail();
-    closeShop();
+    closeInventory();
     hideSummary();
   }
 });
@@ -1164,7 +1626,10 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 
+window.addEventListener("resize", render);
+
 render();
 renderInventory();
 renderShop();
 renderAudioSettings();
+if (welcomeOpen) els.welcomeModal.classList.remove("hidden");
