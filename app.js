@@ -2,7 +2,7 @@ const STORAGE_KEY = "bubble-gum-indulgence-v2";
 const AUDIO_STORAGE_KEY = "bubble-gum-indulgence-audio-v1";
 const MODE_STORAGE_KEY = "bubble-gum-indulgence-mode-v1";
 const INFINITE_STORAGE_KEY = "bubble-gum-indulgence-infinite-v1";
-const WELCOME_STORAGE_KEY = "bubble-gum-indulgence-welcome-v2";
+const WELCOME_STORAGE_KEY = "bubble-gum-indulgence-welcome-v3";
 const STREAK_RUNS_REQUIRED = 3;
 const CLICK_BONUS_PER_ACTION = 1;
 const MAX_CLICK_BONUS = 100;
@@ -313,6 +313,7 @@ let countdownActive = false;
 let countdownValue = 0;
 let countdownTimer = null;
 let welcomeOpen = !hasSeenWelcome();
+let welcomeDismissible = false;
 
 const els = {
   arcade: document.querySelector("#arcade"),
@@ -336,6 +337,8 @@ const els = {
   welcomeInfiniteButton: document.querySelector("#welcomeInfiniteButton"),
   achievementsButton: document.querySelector("#achievementsButton"),
   leaderboardButton: document.querySelector("#leaderboardButton"),
+  instructionsButton: document.querySelector("#instructionsButton"),
+  closeWelcomeButton: document.querySelector("#closeWelcomeButton"),
   labStage: document.querySelector("#labStage"),
   labBubble: document.querySelector("#labBubble"),
   labBubbleText: document.querySelector("#labBubbleText"),
@@ -588,10 +591,28 @@ function finishWelcome(mode) {
     localStorage.setItem(WELCOME_STORAGE_KEY, "seen");
   } catch {}
   welcomeOpen = false;
+  welcomeDismissible = false;
+  els.closeWelcomeButton.classList.add("hidden");
   els.welcomeModal.classList.add("hidden");
   render();
   renderInventory();
   renderShop();
+}
+
+function openInstructions() {
+  if (game.active || countdownActive) return;
+  welcomeOpen = true;
+  welcomeDismissible = true;
+  els.closeWelcomeButton.classList.remove("hidden");
+  els.welcomeModal.classList.remove("hidden");
+}
+
+function closeInstructions() {
+  if (!welcomeDismissible) return;
+  welcomeOpen = false;
+  welcomeDismissible = false;
+  els.closeWelcomeButton.classList.add("hidden");
+  els.welcomeModal.classList.add("hidden");
 }
 
 function activeGum() {
@@ -718,6 +739,7 @@ function render() {
   els.inventoryButton.disabled = game.active || countdownActive;
   els.achievementsButton.disabled = game.active || countdownActive;
   els.leaderboardButton.disabled = game.active || countdownActive;
+  els.instructionsButton.disabled = game.active || countdownActive;
   els.modeShopButton.disabled = game.active || countdownActive;
   els.labModeButton.disabled = game.active || countdownActive;
   els.challengeModeButton.disabled = game.active || countdownActive;
@@ -1770,6 +1792,8 @@ window.addEventListener("pointercancel", releaseLabBubble);
 els.inventoryButton.addEventListener("click", openInventory);
 els.achievementsButton.addEventListener("click", openAchievements);
 els.leaderboardButton.addEventListener("click", openLeaderboard);
+els.instructionsButton.addEventListener("click", openInstructions);
+els.closeWelcomeButton.addEventListener("click", closeInstructions);
 els.modeShopButton.addEventListener("click", focusShop);
 els.settingsButton.addEventListener("click", openSettings);
 els.closeInventoryButton.addEventListener("click", closeInventory);
@@ -1842,6 +1866,7 @@ window.addEventListener("keydown", (event) => {
   }
 
   if (event.key === "Escape") {
+    closeInstructions();
     closeResetConfirm();
     closeSettings();
     closeGumDetail();

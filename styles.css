@@ -959,12 +959,31 @@ h3 {
 }
 
 .welcome-card {
+  position: relative;
   width: min(760px, 100%);
   padding: clamp(24px, 4vw, 38px);
   border: 0;
   border-radius: 22px;
   background: #fffafd;
   box-shadow: 0 30px 90px rgba(65, 43, 56, 0.25);
+}
+
+.welcome-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  min-height: 36px;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--ink);
+  background: #fff;
+  cursor: pointer;
+  font-weight: 850;
+}
+
+.welcome-close.hidden {
+  display: none;
 }
 
 .welcome-intro {
@@ -999,24 +1018,46 @@ h3 {
   background: var(--hot);
 }
 
-.welcome-controls {
-  margin-bottom: 0;
-  color: var(--muted);
-  font-size: 0.92rem;
-  font-weight: 700;
+.tutorial-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 18px;
 }
 
-.welcome-controls kbd {
-  display: inline-grid;
-  min-width: 26px;
-  min-height: 24px;
-  place-items: center;
-  border: 1px solid #d8c7d1;
-  border-bottom-width: 2px;
-  border-radius: 6px;
-  color: var(--ink);
+.tutorial-steps div {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1px 8px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
   background: #fff;
-  font: inherit;
+  text-align: left;
+}
+
+.tutorial-steps span {
+  grid-row: span 2;
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border-radius: 8px;
+  color: #fff;
+  background: var(--hot);
+  font-size: 0.76rem;
+  font-weight: 950;
+}
+
+.tutorial-steps strong {
+  font-size: 0.84rem;
+}
+
+.tutorial-steps small {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
 }
 
 .welcome-modes {

@@ -32,6 +32,9 @@
             <button class="icon-button" id="leaderboardButton" type="button" aria-label="Open leaderboard" title="Leaderboard">
               Leaderboard
             </button>
+            <button class="icon-button" id="instructionsButton" type="button" aria-label="Show instructions" title="Instructions">
+              Instructions
+            </button>
             <button class="icon-button" id="settingsButton" type="button" aria-label="Open settings" title="Settings">
               Settings
             </button>
@@ -209,10 +212,15 @@
 
     <div class="modal welcome-modal hidden" id="welcomeModal" role="dialog" aria-modal="true" aria-labelledby="welcomeTitle">
       <div class="modal-card welcome-card">
+        <button class="welcome-close hidden" id="closeWelcomeButton" type="button" aria-label="Close instructions">Close</button>
         <div class="welcome-intro">
           <div class="welcome-brand"><span></span> Bubble Gum Indulgence</div>
           <h2 id="welcomeTitle">Choose your mode</h2>
-          <p class="welcome-controls">Steer with <kbd>←</kbd> <kbd>→</kbd> or <kbd>A</kbd> <kbd>D</kbd>. Dodge the walls. Clicks boost cash.</p>
+          <div class="tutorial-steps" aria-label="How to play">
+            <div><span>1</span><strong>Steer</strong><small>← → or A D</small></div>
+            <div><span>2</span><strong>Survive</strong><small>Stay off the walls</small></div>
+            <div><span>3</span><strong>Earn</strong><small>Time + clicks pay</small></div>
+          </div>
         </div>
 
         <div class="welcome-modes">
