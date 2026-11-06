@@ -28,6 +28,12 @@ const ACHIEVEMENTS = [
   { id: "all-gums", title: "Shelf Complete", detail: "Own all 55 gums", type: "gums", target: 55 },
   { id: "click-frenzy", title: "Click Frenzy", detail: "Use 50 clicks in one run", type: "clicks", target: 50 },
 ];
+const SHOP_SHELVES = {
+  early: [1, 4],
+  rising: [5, 9],
+  expert: [10, 13],
+  elite: [14, 18],
+};
 const FICTIONAL_LEADERBOARD = [
   { name: "BubbleBot_87", time: 42.8, gum: "Gelato Glow" },
   { name: "ChewChamp", time: 34.6, gum: "Churro Charge" },
@@ -51,7 +57,7 @@ const gums = [
     steerSpeed: 48,
     collisionPadding: 1.6,
     bubbleGrowth: 1,
-    perk: "Classic Chew: balanced starter stats.",
+    perk: "Training Chew: your first three runs get slower walls while you learn.",
     tier: 1,
   },
   {
@@ -374,6 +380,7 @@ const els = {
   track: document.querySelector("#track"),
   controlChip: document.querySelector("#controlChip"),
   playButton: document.querySelector("#playButton"),
+  runPromise: document.querySelector("#runPromise"),
   leftButton: document.querySelector("#leftButton"),
   rightButton: document.querySelector("#rightButton"),
   gumTier: document.querySelector("#gumTier"),
@@ -401,6 +408,7 @@ const els = {
   shopBalance: document.querySelector("#shopBalance"),
   shopList: document.querySelector("#shopList"),
   shopSearch: document.querySelector("#shopSearch"),
+  shopTierFilter: document.querySelector("#shopTierFilter"),
   gumDetailModal: document.querySelector("#gumDetailModal"),
   closeGumDetailButton: document.querySelector("#closeGumDetailButton"),
   detailPackArt: document.querySelector("#detailPackArt"),
@@ -734,6 +742,9 @@ function render() {
       : infiniteMode
         ? "Start infinite run"
         : "Start challenge";
+  els.runPromise.textContent = infiniteMode
+    ? "Try every flavor, chase a bigger bubble, and keep your infinite wallet."
+    : "Pop bigger, earn faster, unlock your next flavor.";
   els.playButton.disabled = game.active || countdownActive;
   els.settingsButton.disabled = game.active || countdownActive;
   els.inventoryButton.disabled = game.active || countdownActive;
@@ -862,12 +873,17 @@ function renderInventory() {
 function renderShop() {
   els.shopList.innerHTML = "";
   const searchTerm = els.shopSearch.value.trim().toLowerCase();
+  const selectedShelf = els.shopTierFilter.value;
+  const shelfRange = SHOP_SHELVES[selectedShelf];
   const collection = activeCollection();
   const infiniteMode = currentMode === "infinite";
+  const visibleGums = gums.filter((gum) => {
+    const matchesSearch = `${gum.name} ${gum.flavor} ${gum.perk}`.toLowerCase().includes(searchTerm);
+    const matchesShelf = !shelfRange || (gum.tier >= shelfRange[0] && gum.tier <= shelfRange[1]);
+    return matchesSearch && matchesShelf;
+  });
 
-  gums
-    .filter((gum) => `${gum.name} ${gum.flavor} ${gum.perk}`.toLowerCase().includes(searchTerm))
-    .forEach((gum) => {
+  visibleGums.forEach((gum) => {
     const owned = collection.unlocked.includes(gum.id);
     const canBuy = infiniteMode || state.cash >= gum.price;
     const card = document.createElement("article");
@@ -907,6 +923,13 @@ function renderShop() {
 
     els.shopList.append(card);
   });
+
+  if (visibleGums.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "shop-empty";
+    empty.textContent = "No gum on this shelf matches that search.";
+    els.shopList.append(empty);
+  }
 }
 
 function rankPercent(gum, score, higherIsBetter = true, pool = gums) {
@@ -1223,11 +1246,11 @@ function popLabBubble() {
   }, 4250);
 }
 
-function startAttempt() {
+function startAttempt(countdownSeconds = 3) {
   if (game.active || countdownActive || welcomeOpen) return;
 
   countdownActive = true;
-  countdownValue = 3;
+  countdownValue = countdownSeconds;
   game = createIdleGame();
   inputDirection = 1;
   hideSummary();
@@ -1284,7 +1307,8 @@ function tick(now) {
   game.elapsed = (now - game.startedAt) / 1000;
   game.speedScale = 1 + game.elapsed * 0.055;
 
-  const wallGrowth = delta * 2.55 * gum.wallSpeed * game.speedScale;
+  const firstRunAssist = currentMode === "challenge" && gum.id === "starter" && state.runs < 3 ? 0.62 : 1;
+  const wallGrowth = delta * 2.55 * gum.wallSpeed * game.speedScale * firstRunAssist;
   game.leftWall += wallGrowth;
   game.rightWall += wallGrowth;
   game.chip += inputDirection * delta * gum.steerSpeed;
@@ -1777,8 +1801,8 @@ function playPop() {
   setTimeout(() => playTone(62, 0.25, "sine", 0.09), 40);
 }
 
-els.playButton.addEventListener("click", startAttempt);
-els.playAgainButton.addEventListener("click", startAttempt);
+els.playButton.addEventListener("click", () => startAttempt(3));
+els.playAgainButton.addEventListener("click", () => startAttempt(1));
 els.welcomeChallengeButton.addEventListener("click", () => finishWelcome("challenge"));
 els.welcomeInfiniteButton.addEventListener("click", () => finishWelcome("infinite"));
 els.labModeButton.addEventListener("click", () => setMode("infinite"));
@@ -1803,6 +1827,7 @@ els.closeGumDetailButton.addEventListener("click", closeGumDetail);
 els.detailAction.addEventListener("click", handleDetailAction);
 els.closeSettingsButton.addEventListener("click", closeSettings);
 els.shopSearch.addEventListener("input", renderShop);
+els.shopTierFilter.addEventListener("change", renderShop);
 els.musicVolume.addEventListener("input", (event) => {
   updateAudioSetting("musicVolume", event.target.value);
   if (Number(event.target.value) > 0) startMusic();

@@ -757,6 +757,24 @@ h3 {
   align-items: stretch;
 }
 
+.primary-action {
+  display: grid;
+  flex: 1;
+  gap: 6px;
+}
+
+.run-promise {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.primary-action .primary {
+  width: 100%;
+}
+
 .nudge-controls {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1405,9 +1423,16 @@ h3 {
   margin-bottom: 14px;
 }
 
+.shop-tools {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 150px;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
 .shop-search {
   width: 100%;
-  margin-bottom: 14px;
+  margin: 0;
   padding: 12px 14px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -1420,6 +1445,43 @@ h3 {
 .shop-search:focus {
   border-color: var(--hot);
   outline: 3px solid rgba(240, 50, 138, 0.14);
+}
+
+.shop-filter-label {
+  display: grid;
+  gap: 3px;
+  color: var(--muted);
+  font-size: 0.65rem;
+  font-weight: 900;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.shop-filter-label select {
+  width: 100%;
+  min-height: 44px;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  background: #fff;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.shop-empty {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 18px 12px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  background: #fff;
+  text-align: center;
+  font-weight: 800;
 }
 
 .shop-list {
@@ -1839,7 +1901,6 @@ h3 {
   }
 
   .hud,
-  .controls,
   .shop-head,
   .settings-head {
     align-items: stretch;
@@ -1847,7 +1908,25 @@ h3 {
   }
 
   .hud-actions {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    width: 100%;
     justify-content: stretch;
+  }
+
+  .hud-actions .stat-pill {
+    grid-column: span 3;
+  }
+
+  .hud-actions .icon-button {
+    grid-column: span 2;
+    padding-inline: 8px;
+    font-size: 0.8rem;
+  }
+
+  .hud-actions .icon-button:nth-of-type(4),
+  .hud-actions .icon-button:nth-of-type(5) {
+    grid-column: span 3;
   }
 
   .stat-pill,
@@ -1858,7 +1937,38 @@ h3 {
   }
 
   .game-card {
+    grid-template-rows: auto minmax(280px, auto) auto auto auto;
     min-height: auto;
+  }
+
+  .game-card .controls {
+    display: contents;
+  }
+
+  .game-card .primary-action {
+    order: -1;
+    padding: 2px 0 4px;
+  }
+
+  .game-card .bubble-zone {
+    order: 0;
+    min-height: 280px;
+  }
+
+  .game-card .track-wrap {
+    order: 1;
+  }
+
+  .game-card .nudge-controls {
+    order: 2;
+  }
+
+  .game-card .streak-status {
+    order: 3;
+  }
+
+  .run-promise {
+    text-align: center;
   }
 
   .welcome-modes {
@@ -1916,6 +2026,10 @@ h3 {
 
   .nudge-controls {
     min-width: 0;
+  }
+
+  .shop-tools {
+    grid-template-columns: 1fr;
   }
 
   .reset-zone {

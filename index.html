@@ -144,7 +144,10 @@
             </div>
 
             <div class="controls">
-              <button class="primary" id="playButton" type="button">Start attempt</button>
+              <div class="primary-action">
+                <p class="run-promise" id="runPromise">Pop bigger, earn faster, unlock your next flavor.</p>
+                <button class="primary" id="playButton" type="button">Start attempt</button>
+              </div>
               <div class="nudge-controls" aria-label="Touch controls">
                 <button id="leftButton" type="button">Left</button>
                 <button id="rightButton" type="button">Right</button>
@@ -204,7 +207,19 @@
             <h2 id="shopTitle">Gum Shop</h2>
             <span id="shopBalance">Wallet $0</span>
           </div>
-          <input class="shop-search" id="shopSearch" type="search" placeholder="Find a flavor" aria-label="Search gum shop">
+          <div class="shop-tools">
+            <input class="shop-search" id="shopSearch" type="search" placeholder="Find a flavor" aria-label="Search gum shop">
+            <label class="shop-filter-label" for="shopTierFilter">
+              Shelf
+              <select id="shopTierFilter" aria-label="Filter gum shop by shelf">
+                <option value="early">Starter · Tiers 1–4</option>
+                <option value="rising">Rising · Tiers 5–9</option>
+                <option value="expert">Expert · Tiers 10–13</option>
+                <option value="elite">Elite · Tiers 14–18</option>
+                <option value="all">All 55 gums</option>
+              </select>
+            </label>
+          </div>
           <div class="shop-list sidebar-shop" id="shopList"></div>
         </section>
       </aside>
@@ -217,7 +232,7 @@
           <div class="welcome-brand"><span></span> Bubble Gum Indulgence</div>
           <h2 id="welcomeTitle">Choose your mode</h2>
           <div class="tutorial-steps" aria-label="How to play">
-            <div><span>1</span><strong>Steer</strong><small>← → or A D</small></div>
+            <div><span>1</span><strong>Steer</strong><small>Keys or tap Left / Right</small></div>
             <div><span>2</span><strong>Survive</strong><small>Stay off the walls</small></div>
             <div><span>3</span><strong>Earn</strong><small>Time + clicks pay</small></div>
           </div>
